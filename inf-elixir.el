@@ -52,8 +52,13 @@
   :group 'inf-elixir
   :type 'string)
 
-(defcustom inf-elixir-prompt-regex "^iex>+ *"
+(defcustom inf-elixir-prompt-regexp "^\\(iex\\|\\.\\.\\.\\)(.+)>"
   "Regexp to recognize prompt."
+  :group 'inf-elixir
+  :type 'regexp)
+
+(defcustom inf-elixir-filter-regexp "\\`\\s *\\(:\\(\\w\\|\\s_\\)\\)?\\s *\\'"
+  "Elixir comint input filter regex."
   :group 'inf-elixir
   :type 'regexp)
 
@@ -74,7 +79,7 @@
 
 (defcustom inf-elixir-start-file nil
   "Inferior Elixir start file."
-  :group 'info-clojure
+  :group 'info-elixir
   :type 'string)
 
 (defcustom inf-elixir-source-modes '(elixir-mode)
@@ -102,6 +107,12 @@ considered a Elixir source file by `inf-elixir-load-file'."
 (defvar inf-elixir-version "0.0.1"
   "Current version string.")
 
+(defvar inf-elixir-last-output-text ""
+  "Process (cache) last output text.")
+
+(defvar inf-elixir-last-output-line ""
+  "Process (cache) last output line.")
+
 (defvar inf-elixir-prev-l/c-dir/file nil
   "Caches the last (directory . file) pair.")
 
@@ -114,16 +125,25 @@ considered a Elixir source file by `inf-elixir-load-file'."
   "Sentinel function to handle (PROCESS EVENT) relation."
   (princ (format "Process: %s had the event '%s'" process event)))
 
+(defun inf-elixir-proc-cache-output ()
+  "Parse and cache the process output."
+  (let ((text (mapconcat (lambda (str) str)
+                         (reverse inf-elixir-proc-output-list) "")))
+    (setq inf-elixir-last-output-text text)
+    (setq inf-elixir-last-output-line
+          (car (last (split-string inf-elixir-last-output-text "\n") 2)))))
+
 (defun inf-elixir-proc-wait (proc timeout)
   "Wait for the PROC output, leave if reaches the TIMEOUT."
   (let ((string (car inf-elixir-proc-output-list)))
     (while (and (stringp string)
 		(not (string-match-p comint-prompt-regexp string)))
       (accept-process-output proc timeout)
-      (sleep-for nil 100))))
+      (sleep-for nil 100))
+    (inf-elixir-proc-cache-output)))
 
 (defun inf-elixir-comint-preoutput-filter (string)
-  "Return the output STRING filtered."
+  "Return the output STRING."
   (let ((string (if (stringp string) string "")))
     (push string inf-elixir-proc-output-list)
     string))
@@ -140,7 +160,7 @@ TIMEOUT, the `accept-process-output' timeout."
       (apply 'funcall send-func proc args)
       (comint-send-string proc "\n")
       (accept-process-output proc timeout)
-      (inf-elixir-proc-sentinel proc timeout))))
+      (inf-elixir-proc-wait proc timeout))))
 
 (defun inf-elixir-comint-send-string (string &optional op-key timeout)
   "Send STRING to the current inferior process.
@@ -212,7 +232,7 @@ TIMEOUT, the `accept-process-output' timeout."
   (put-text-property 0 1 'cursor t line)
   (overlay-put inf-elixir-overlay 'after-string line))
 
-(defun inf-elixir-remove-overlay ()
+(defun inf-elixir-delete-overlay ()
   "Remove `info-elixir-overlay' display (if any) prior to new user input."
   (delete-overlay inf-elixir-overlay))
 
@@ -234,6 +254,14 @@ default: 'symbol."
 	 (fmt (if (not str) "%s:" "%s: [%s]"))
 	 (prompt (format fmt (or prompt "Str: ") str)))
     (list (read-string prompt nil nil str))))
+
+(defun inf-elixir-eval-last-sexp ()
+  "Send the previous sexp to the inferior Elixir process."
+  (interactive)
+  (inf-elixir-comint-send-region
+   (save-excursion (backward-sexp) (point)) (point))
+  (inf-elixir-display-overlay
+   (concat " => "  (ansi-color-filter-apply inf-elixir-last-output-line))))
 
 (defun inf-elixir-eval-buffer ()
   "Send the current buffer to the inferior Elixir process."
@@ -275,6 +303,104 @@ default: 'symbol."
   (interactive (inf-elixir-read-thing "Search for"))
   ;; (inf-elixir-comint-send-string str-or-regex 'apropos)
   (error "Not implemented yet"))
+
+(defun inf-elixir-syntax-table ()
+  "Elixir-mode syntax table copy."
+  (and (require 'elixir-mode nil t)
+       (boundp 'elixir-mode-syntax-table)
+       (copy-syntax-table elixir-mode-syntax-table)))
+
+(defvar inf-elixir-mode-map
+  (let ((map (copy-keymap comint-mode-map)))
+    (define-key map (kbd "C-x C-e") #'inf-elixir-eval-last-sexp)
+    (define-key map (kbd "C-c C-l") #'inf-elixir-load-file)
+    (define-key map (kbd "C-c C-q") #'inf-elixir-comint-quit)
+    (easy-menu-define inf-elixir-mode-menu map
+      "Inferior Elixir REPL Menu"
+      '("Inf-Elixir REPL"
+	["Eval last sexp" inf-elixir-eval-last-sexp t]
+	"--"
+	["Load file" inf-elixir-load-file t]
+	"--"
+	["Quit" inf-elixir-comint-quit]
+	"--"
+	["Version" inf-elixir-display-version]))
+    map))
+
+(defvar inf-elixir-minor-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-M-x") #'inf-elixir-eval-def)
+    (define-key map (kbd "C-c C-e") #'inf-elixir-eval-last-sexp)
+    (define-key map (kbd "C-x C-e") #'inf-elixir-eval-last-sexp)
+    (define-key map (kbd "C-c C-b") #'inf-elixir-eval-buffer)
+    (define-key map (kbd "C-c C-r") #'inf-elixir-eval-region)
+    (define-key map (kbd "C-c C-l") #'inf-elixir-load-file)
+    (define-key map (kbd "C-c C-q") #'inf-elixir-comint-quit)
+    (easy-menu-define inf-clojure-minor-mode-menu map
+      "Inferior Elixir Minor Mode Menu"
+      '("Inf-Elixir"
+	["Eval region" inf-elixir-eval-region t]
+	["Eval buffer" inf-elixir-eval-buffer t]
+	["Eval function" inf-elixir-eval-def t]
+	["Eval last sexp" inf-elixir-eval-last-sexp t]
+	"--"
+	["Load file..." inf-elixir-load-file t]
+	"--"
+	["Quit REPL" inf-elixir-comint-quit]))
+    map))
+
+
+;;;###autoload
+(define-minor-mode inf-elixir-minor-mode
+  "Minor mode for interacting with the inferior Elixir (comint) process buffer.
+If called interactively, toggle ‘Inf-Elixir minor mode’.  If the
+prefix argument is positive, enable the mode, and if it is zero
+or negative, disable the mode.
+If called from Lisp, toggle the mode if ARG is ‘toggle’.  Enable
+the mode if ARG is nil, omitted, or is a positive number.
+Disable the mode if ARG is a negative number.
+The mode’s hook is called both when the mode is enabled and when
+it is disabled.
+The following commands are available:
+\\{inf-elixir-minor-mode-map}"
+  :lighter ""
+  :keymap inf-elixir-minor-mode-map
+  (cond
+   (inf-elixir-minor-mode
+    (setq-local comint-input-sender #'inf-elixir-comint-input-sender)
+    (add-hook 'pre-command-hook #'inf-elixir-delete-overlay))
+   (t
+    (inf-elixir-delete-overlay)
+    (remove-hook 'pre-command-hook #'inf-elixir-delete-overlay))))
+
+(define-derived-mode inf-elixir-mode comint-mode "Inf-Elixir"
+  "Major mode for `inf-elixir' comint buffer.
+Runs a Elixir interpreter with the help of comint-mode,
+use the buffer abstraction as the main I/O bridge between
+Emacs and the subprocess.
+You can send text to the inferior Elixir process from other buffers or the `minibuffer'
+directly.
+    `inf-elixir-eval-defn'  sends function definition
+    `inf-elixir-eval-region' sends the current region
+    `inf-elixir-eval-buffer' sends the current buffer
+The following commands are available:
+\\{inf-elixir-minor-mode-map}"
+  :group 'inf-elixir
+  :syntax-table (inf-elixir-syntax-table)
+
+  (setq comint-prompt-regexp inf-elixir-prompt-regexp
+	comint-prompt-read-only inf-elixir-prompt-read-only
+	comint-input-sender #'inf-elixir-comint-input-sender
+	comint-input-filter #'inf-elixir-comint-input-filter
+	comint-get-old-input #'inf-elixir-comint-get-old-input)
+
+  (when (require 'elixir-mode nil t)
+    (set (make-local-variable 'font-lock-defaults) '(elixir-font-lock-keywords t)))
+  (set (make-local-variable 'paragraph-separate) "\\'")
+  (set (make-local-variable 'paragraph-start) inf-elixir-prompt-regexp))
+
+;;;###autoload
+(add-hook 'inf-elixir-minor-mode-hook #'inf-elixir-comint-setup)
 
 (provide 'inf-elixir)
 
