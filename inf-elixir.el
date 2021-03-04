@@ -52,7 +52,7 @@
   :group 'inf-elixir
   :type 'string)
 
-(defcustom inf-elixir-prompt-regexp "^\\(iex\\|\\.\\.\\.\\)(.+)>"
+(defcustom inf-elixir-prompt-regexp "^\\(iex\\|\\.\\.\\.\\).*>"
   "Regexp to recognize prompt."
   :group 'inf-elixir
   :type 'regexp)
@@ -61,11 +61,6 @@
   "Elixir comint input filter regex."
   :group 'inf-elixir
   :type 'regexp)
-
-(defcustom inf-elixir-proc-timeout 2
-  "The `accept-process-output' timeout in seconds."
-  :group 'inf-elixir
-  :type 'integer)
 
 (defcustom inf-elixir-program (executable-find "iex")
   "Elixir executable full path program."
@@ -117,6 +112,12 @@ considered a Elixir source file by `inf-elixir-load-file'."
 (defvar inf-elixir-prev-l/c-dir/file nil
   "Caches the last (directory . file) pair.")
 
+(defvar inf-elixir-comint-filter-in-progress nil
+  "Check if filter is running.")
+
+(defvar inf-elixir--completions-list '()
+  "Completions list to use if it is enabled.")
+
 (defun inf-elixir-proc ()
   "Return comint buffer current process."
   (and inf-elixir-proc-buffer
@@ -130,50 +131,45 @@ considered a Elixir source file by `inf-elixir-load-file'."
   "Parse and cache the process output."
   (let ((text (mapconcat (lambda (str) str)
                          (reverse inf-elixir-proc-output-list) "")))
-    (setq inf-elixir-last-output-text (inf-elixir--sanatize-output text))
-    (setq inf-elixir-last-output-line
+    (setq inf-elixir-last-output-text text
+          inf-elixir-last-output-line
           (car (last (split-string inf-elixir-last-output-text "\n") 2)))))
-
-(defun inf-elixir-proc-wait (proc timeout)
-  "Wait for the PROC output, leave if reaches the TIMEOUT."
-  (let ((string (car inf-elixir-proc-output-list)))
-    (while (and (stringp string)
-                (not (string-match-p comint-prompt-regexp string)))
-      (accept-process-output proc timeout))
-    (inf-elixir-proc-cache-output)))
 
 (defun inf-elixir-comint-preoutput-filter (string)
   "Return the output STRING."
-  (let ((string (if (stringp string) string "")))
-    (push string inf-elixir-proc-output-list)
+  (let* ((string (if (stringp string) string ""))
+		 (text (inf-elixir--sanatize-output string)))
+    (push text inf-elixir-proc-output-list)
+	(message (format "fui chamado: %s" text))
+	(message (format "match: %s" (string-match-p inf-elixir-prompt-regexp text)))
+    (when (string-match-p inf-elixir-prompt-regexp text)
+	  (message "fiz match")
+      (setq inf-elixir-comint-filter-in-progress nil))
     string))
 
-(defun inf-elixir-comint-send (send-func &optional timeout &rest args)
+(defun inf-elixir-comint-send (send-func &rest args)
   "Send ARGS (string or region) using the chosen SEND-FUNC.
-Possible values of SEND-FUNC are: `comint-send-string' or `comint-send-region'.
-TIMEOUT, the `accept-process-output' timeout."
-  (let ((proc (inf-elixir-proc))
-        (timeout (or timeout inf-elixir-proc-timeout))
-        (comint-preoutput-filter-functions '(inf-elixir-comint-preoutput-filter)))
+Possible values of SEND-FUNC are: `comint-send-string' or `comint-send-region'."
+  (let ((proc (inf-elixir-proc)))
     (when (process-live-p proc)
-      (setq inf-elixir-proc-output-list '())
+      (setq inf-elixir-comint-filter-in-progress t
+			inf-elixir-proc-output-list '())
       (apply 'funcall send-func proc args)
       (comint-send-string proc "\n")
-      (accept-process-output proc timeout)
-      (inf-elixir-proc-wait proc timeout))))
+	  (while inf-elixir-comint-filter-in-progress
+		(sleep-for 0 10))
+	  (inf-elixir-proc-cache-output))))
 
-(defun inf-elixir-comint-send-string (string &optional op-key timeout)
+(defun inf-elixir-comint-send-string (string &optional op-key)
   "Send STRING to the current inferior process.
-Format the string selecting the right format using the OP-KEY.1
-TIMEOUT, the `accept-process-output' timeout."
+Format the string selecting the right format using the OP-KEY."
   (let ((string (if (not op-key) string
                   (format (cdr (assoc op-key inf-elixir-ops-alist)) string))))
-    (inf-elixir-comint-send #'comint-send-string timeout string)))
+    (inf-elixir-comint-send #'comint-send-string string)))
 
-(defun inf-elixir-comint-send-region (start end &optional timeout)
-  "Send region delimited bu START/END to the inferior process.
-TIMEOUT, the `accept-process-output' timeout."
-  (inf-elixir-comint-send #'comint-send-region timeout start end))
+(defun inf-elixir-comint-send-region (start end)
+  "Send region delimited bu START/END to the inferior process."
+  (inf-elixir-comint-send #'comint-send-region start end))
 
 (defun inf-elixir-comint-input-sender (_ string)
   "Comint input sender STRING function."
@@ -201,8 +197,8 @@ TIMEOUT, the `accept-process-output' timeout."
   (interactive)
   (and inf-elixir-proc-buffer
        (with-current-buffer inf-elixir-proc-buffer
-         (comint-quit-subjob)))
-  (kill-buffer inf-elixir-proc-buffer))
+         (comint-quit-subjob)
+		 (kill-buffer inf-elixir-proc-buffer))))
 
 ;;;###autoload
 (defun inf-elixir-comint-run ()
@@ -261,6 +257,7 @@ default: 'symbol."
 (defun inf-elixir-eval-last-sexp ()
   "Send the previous sexp to the inferior Elixir process."
   (interactive)
+  ;; (inf-elixir-comint-send-string (inf-elixir--get-expr))
   (inf-elixir-comint-send-region
    (save-excursion (backward-sexp) (point)) (point))
   (inf-elixir-display-overlay
@@ -307,16 +304,16 @@ default: 'symbol."
 
 (defun inf-elixir-complete ()
   "Invoke completions for elixir expressions."
-  (let* ((expr (inf-elixir--get-expr))
-         (_ (inf-elixir-comint-send-string expr 'complete))
-         (candidates (inf-elixir--list-to-sexp)))
-    (list (point) (point) candidates)))
+  (let* ((expr (inf-elixir--get-expr)))
+    (inf-elixir-comint-send-string expr 'complete)
+    (list (point) (point) (inf-elixir--list-to-sexp))))
 
 (defun inf-elixir--list-to-sexp ()
   "Transforms Elixir vector to sexp."
   (let* ((replace-regexp "iex> \\|,\\|'\\|\\[\\|\\]\\|{\\|}\\|\:yes\\|\n")
          (sanatized-output (replace-regexp-in-string
                             replace-regexp "" inf-elixir-last-output-text)))
+	(message (format "Completions %s" sanatized-output))
     (split-string sanatized-output)))
 
 (defun inf-elixir--get-expr ()
@@ -401,7 +398,8 @@ The following commands are available:
    (inf-elixir-minor-mode
     (setq-local comint-input-sender #'inf-elixir-comint-input-sender
                 completion-at-point-functions '(inf-elixir-complete))
-    (add-hook 'pre-command-hook #'inf-elixir-delete-overlay))
+    (add-hook 'pre-command-hook #'inf-elixir-delete-overlay)
+    (add-hook 'comint-preoutput-filter-functions #'inf-elixir-comint-preoutput-filter))
    (t
     (inf-elixir-delete-overlay)
     (remove-hook 'pre-command-hook #'inf-elixir-delete-overlay))))
