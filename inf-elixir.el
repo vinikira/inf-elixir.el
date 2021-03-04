@@ -138,12 +138,10 @@ considered a Elixir source file by `inf-elixir-load-file'."
 (defun inf-elixir-comint-preoutput-filter (string)
   "Return the output STRING."
   (let* ((string (if (stringp string) string ""))
-		 (text (inf-elixir--sanatize-output string)))
+         (text (inf-elixir--sanatize-output string)))
     (push text inf-elixir-proc-output-list)
-	(message (format "fui chamado: %s" text))
-	(message (format "match: %s" (string-match-p inf-elixir-prompt-regexp text)))
     (when (string-match-p inf-elixir-prompt-regexp text)
-	  (message "fiz match")
+      (message "fiz match")
       (setq inf-elixir-comint-filter-in-progress nil))
     string))
 
@@ -153,12 +151,12 @@ Possible values of SEND-FUNC are: `comint-send-string' or `comint-send-region'."
   (let ((proc (inf-elixir-proc)))
     (when (process-live-p proc)
       (setq inf-elixir-comint-filter-in-progress t
-			inf-elixir-proc-output-list '())
+            inf-elixir-proc-output-list '())
       (apply 'funcall send-func proc args)
       (comint-send-string proc "\n")
-	  (while inf-elixir-comint-filter-in-progress
-		(sleep-for 0 10))
-	  (inf-elixir-proc-cache-output))))
+      (while inf-elixir-comint-filter-in-progress
+        (sleep-for 0 10))
+      (inf-elixir-proc-cache-output))))
 
 (defun inf-elixir-comint-send-string (string &optional op-key)
   "Send STRING to the current inferior process.
@@ -198,7 +196,7 @@ Format the string selecting the right format using the OP-KEY."
   (and inf-elixir-proc-buffer
        (with-current-buffer inf-elixir-proc-buffer
          (comint-quit-subjob)
-		 (kill-buffer inf-elixir-proc-buffer))))
+         (kill-buffer inf-elixir-proc-buffer))))
 
 ;;;###autoload
 (defun inf-elixir-comint-run ()
@@ -313,7 +311,7 @@ default: 'symbol."
   (let* ((replace-regexp "iex> \\|,\\|'\\|\\[\\|\\]\\|{\\|}\\|\:yes\\|\n")
          (sanatized-output (replace-regexp-in-string
                             replace-regexp "" inf-elixir-last-output-text)))
-	(message (format "Completions %s" sanatized-output))
+    (message (format "Completions %s" sanatized-output))
     (split-string sanatized-output)))
 
 (defun inf-elixir--get-expr ()
