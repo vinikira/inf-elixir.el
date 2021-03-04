@@ -92,7 +92,8 @@ considered a Elixir source file by `inf-elixir-load-file'."
 (defvar inf-elixir-ops-alist
   `((import-file . "import_file \"%s\"")
     (help . "h %s")
-    (type . "t %s"))
+    (type . "t %s")
+    (complete . "IEx.Autocomplete.expand(Enum.reverse('%s'))"))
   "Operation associative list: (OP-KEY . OP-FMT).")
 
 (defvar inf-elixir-overlay (make-overlay (point-min) (point-min) nil t t)
@@ -129,7 +130,7 @@ considered a Elixir source file by `inf-elixir-load-file'."
   "Parse and cache the process output."
   (let ((text (mapconcat (lambda (str) str)
                          (reverse inf-elixir-proc-output-list) "")))
-    (setq inf-elixir-last-output-text text)
+    (setq inf-elixir-last-output-text (inf-elixir--sanatize-output text))
     (setq inf-elixir-last-output-line
           (car (last (split-string inf-elixir-last-output-text "\n") 2)))))
 
@@ -138,8 +139,7 @@ considered a Elixir source file by `inf-elixir-load-file'."
   (let ((string (car inf-elixir-proc-output-list)))
     (while (and (stringp string)
 		(not (string-match-p comint-prompt-regexp string)))
-      (accept-process-output proc timeout)
-      (sleep-for nil 100))
+      (accept-process-output proc timeout))
     (inf-elixir-proc-cache-output)))
 
 (defun inf-elixir-comint-preoutput-filter (string)
@@ -264,7 +264,11 @@ default: 'symbol."
   (inf-elixir-comint-send-region
    (save-excursion (backward-sexp) (point)) (point))
   (inf-elixir-display-overlay
-   (concat " => "  (ansi-color-filter-apply inf-elixir-last-output-line))))
+   (concat " => "  inf-elixir-last-output-line)))
+
+(defun inf-elixir--sanatize-output (string)
+  "Sanatize output STRING."
+  (ansi-color-filter-apply string))
 
 (defun inf-elixir-eval-buffer ()
   "Send the current buffer to the inferior Elixir process."
@@ -300,6 +304,31 @@ default: 'symbol."
   "Invoke `t NAME` operation."
   (interactive (inf-elixir-read-thing "Type Help"))
   (inf-elixir-comint-send-string name 'type))
+
+(defun inf-elixir-complete ()
+  "Invoke completions for elixir expressions."
+  (let* ((expr (inf-elixir--get-expr))
+	 (_ (inf-elixir-comint-send-string expr 'complete))
+	 (candidates (inf-elixir--list-to-sexp)))
+    (list (point) (point) candidates)))
+
+(defun inf-elixir--list-to-sexp ()
+  "Transforms Elixir vector to sexp."
+  (let* ((replace-regexp "iex> \\|,\\|'\\|\\[\\|\\]\\|{\\|}\\|\:yes\\|\n")
+	 (sanatized-output (replace-regexp-in-string
+			    replace-regexp "" inf-elixir-last-output-text)))
+    (split-string sanatized-output)))
+
+(defun inf-elixir--get-expr ()
+  "Return the expression under the cursor."
+  (if (or (looking-at "\s") (eolp))
+      (let (p1 p2 (skip-chars "-_A-Za-z0-9.?!@:"))
+        (save-excursion
+          (skip-chars-backward skip-chars)
+          (setq p1 (point))
+          (skip-chars-forward skip-chars)
+          (setq p2 (point))
+          (buffer-substring-no-properties p1 p2)))))
 
 (defun inf-elixir-apropos (str-or-regex)
   "Invoke Elixir apropos STR-OR-REGEX operation."
@@ -370,7 +399,8 @@ The following commands are available:
   :keymap inf-elixir-minor-mode-map
   (cond
    (inf-elixir-minor-mode
-    (setq-local comint-input-sender #'inf-elixir-comint-input-sender)
+    (setq-local comint-input-sender #'inf-elixir-comint-input-sender
+		completion-at-point-functions '(inf-elixir-complete))
     (add-hook 'pre-command-hook #'inf-elixir-delete-overlay))
    (t
     (inf-elixir-delete-overlay)
