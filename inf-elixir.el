@@ -79,6 +79,11 @@ considered a Elixir source file by `inf-elixir-load-file'."
   :group 'inf-elixir
   :type '(repeat function))
 
+(defcustom inf-elixir-enable-completion t
+  "If no-nil, enables the completions using iex."
+  :group 'inf-elixir
+  :type 'bool)
+
 (defvar inf-elixir-ops-alist
   `((import-file . "import_file \"%s\"")
     (help . "h %s")
@@ -109,9 +114,6 @@ considered a Elixir source file by `inf-elixir-load-file'."
 
 (defvar inf-elixir-comint-filter-in-progress nil
   "Check if filter is running.")
-
-(defvar inf-elixir--completions-list '()
-  "Completions list to use if it is enabled.")
 
 (defun inf-elixir-proc ()
   "Return comint buffer current process."
@@ -390,7 +392,8 @@ The following commands are available:
   (cond
    (inf-elixir-minor-mode
     (setq-local comint-input-sender #'inf-elixir-comint-input-sender)
-    (push #'inf-elixir-complete completion-at-point-functions)
+    (when inf-elixir-enable-completion
+      (push #'inf-elixir-complete completion-at-point-functions))
     (add-hook 'pre-command-hook #'inf-elixir-delete-overlay)
     (add-hook 'comint-preoutput-filter-functions #'inf-elixir-comint-preoutput-filter))
    (t
