@@ -47,7 +47,7 @@
   :group 'inf-elixir
   :type 'boolean)
 
-(defcustom inf-elixir-buffer-name "*inf-elixir*"
+(defcustom inf-elixir-buffer-name "inf-elixir"
   "Inferior buffer default name."
   :group 'inf-elixir
   :type 'string)
