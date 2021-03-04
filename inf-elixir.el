@@ -221,6 +221,9 @@ TIMEOUT, the `accept-process-output' timeout."
     (with-current-buffer buffer (inf-elixir-mode))
     (display-buffer buffer 'display-buffer-pop-up-window)))
 
+;;;###autoload
+(defalias 'run-elixir #'inf-elixir-comint-run)
+
 (defun inf-elixir-display-version ()
   "Echo the current `inf-elixir' version."
   (interactive)
