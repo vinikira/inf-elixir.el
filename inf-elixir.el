@@ -57,11 +57,6 @@
   :group 'inf-elixir
   :type 'regexp)
 
-(defcustom inf-elixir-filter-regexp "\\`\\s *\\(:\\(\\w\\|\\s_\\)\\)?\\s *\\'"
-  "Elixir comint input filter regex."
-  :group 'inf-elixir
-  :type 'regexp)
-
 (defcustom inf-elixir-program (executable-find "iex")
   "Elixir executable full path program."
   :group 'inf-elixir
@@ -141,9 +136,9 @@ considered a Elixir source file by `inf-elixir-load-file'."
          (text (inf-elixir--sanatize-output string)))
     (push text inf-elixir-proc-output-list)
     (when (string-match-p inf-elixir-prompt-regexp text)
-      (message "fiz match")
+      (inf-elixir-proc-cache-output)
       (setq inf-elixir-comint-filter-in-progress nil))
-    string))
+    text))
 
 (defun inf-elixir-comint-send (send-func &rest args)
   "Send ARGS (string or region) using the chosen SEND-FUNC.
@@ -153,10 +148,12 @@ Possible values of SEND-FUNC are: `comint-send-string' or `comint-send-region'."
       (setq inf-elixir-comint-filter-in-progress t
             inf-elixir-proc-output-list '())
       (apply 'funcall send-func proc args)
-      (comint-send-string proc "\n")
-      (while inf-elixir-comint-filter-in-progress
-        (sleep-for 0 10))
-      (inf-elixir-proc-cache-output))))
+      (comint-send-string proc "\n"))))
+
+(defun inf-elixir--wait-output-filter ()
+  "Wait for comint output filter."
+  (while inf-elixir-comint-filter-in-progress
+    (sleep-for 0 10)))
 
 (defun inf-elixir-comint-send-string (string &optional op-key)
   "Send STRING to the current inferior process.
@@ -172,10 +169,6 @@ Format the string selecting the right format using the OP-KEY."
 (defun inf-elixir-comint-input-sender (_ string)
   "Comint input sender STRING function."
   (inf-elixir-comint-send-string string))
-
-(defun inf-elixir-comint-input-filter (string)
-  "Don't save anything on the STRING matching `inf-elixir-filter-regexp'."
-  (not (string-match-p inf-elixir-filter-regexp string)))
 
 (defun inf-elixir-comint-get-old-input ()
   "Snarf the sexp ending at point."
@@ -196,6 +189,8 @@ Format the string selecting the right format using the OP-KEY."
   (and inf-elixir-proc-buffer
        (with-current-buffer inf-elixir-proc-buffer
          (comint-quit-subjob)
+	 (while (process-live-p (inf-elixir-proc))
+	   (sleep-for 0 10))
          (kill-buffer inf-elixir-proc-buffer))))
 
 ;;;###autoload
@@ -255,9 +250,9 @@ default: 'symbol."
 (defun inf-elixir-eval-last-sexp ()
   "Send the previous sexp to the inferior Elixir process."
   (interactive)
-  ;; (inf-elixir-comint-send-string (inf-elixir--get-expr))
   (inf-elixir-comint-send-region
    (save-excursion (backward-sexp) (point)) (point))
+  (inf-elixir--wait-output-filter)
   (inf-elixir-display-overlay
    (concat " => "  inf-elixir-last-output-line)))
 
@@ -304,14 +299,14 @@ default: 'symbol."
   "Invoke completions for elixir expressions."
   (let* ((expr (inf-elixir--get-expr)))
     (inf-elixir-comint-send-string expr 'complete)
-    (list (point) (point) (inf-elixir--list-to-sexp))))
+    (inf-elixir--wait-output-filter)
+    (list (point) (point) (inf-elixir--get-completions))))
 
-(defun inf-elixir--list-to-sexp ()
-  "Transforms Elixir vector to sexp."
-  (let* ((replace-regexp "iex> \\|,\\|'\\|\\[\\|\\]\\|{\\|}\\|\:yes\\|\n")
+(defun inf-elixir--get-completions ()
+  "Get completions list."
+  (let* ((replace-regexp "iex> \\|,\\|'\\|\\[\\|\\]\\|{\\|}\\|\:yes\\|\:no\\|\n")
          (sanatized-output (replace-regexp-in-string
                             replace-regexp "" inf-elixir-last-output-text)))
-    (message (format "Completions %s" sanatized-output))
     (split-string sanatized-output)))
 
 (defun inf-elixir--get-expr ()
@@ -394,8 +389,8 @@ The following commands are available:
   :keymap inf-elixir-minor-mode-map
   (cond
    (inf-elixir-minor-mode
-    (setq-local comint-input-sender #'inf-elixir-comint-input-sender
-                completion-at-point-functions '(inf-elixir-complete))
+    (setq-local comint-input-sender #'inf-elixir-comint-input-sender)
+    (push #'inf-elixir-complete completion-at-point-functions)
     (add-hook 'pre-command-hook #'inf-elixir-delete-overlay)
     (add-hook 'comint-preoutput-filter-functions #'inf-elixir-comint-preoutput-filter))
    (t
@@ -420,7 +415,6 @@ The following commands are available:
   (setq comint-prompt-regexp inf-elixir-prompt-regexp
         comint-prompt-read-only inf-elixir-prompt-read-only
         comint-input-sender #'inf-elixir-comint-input-sender
-        comint-input-filter #'inf-elixir-comint-input-filter
         comint-get-old-input #'inf-elixir-comint-get-old-input)
 
   (when (require 'elixir-mode nil t)
