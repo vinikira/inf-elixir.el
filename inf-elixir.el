@@ -140,7 +140,7 @@ considered a Elixir source file by `inf-elixir-load-file'."
     (when (string-match-p inf-elixir-prompt-regexp text)
       (inf-elixir-proc-cache-output)
       (setq inf-elixir-comint-filter-in-progress nil))
-    text))
+    string))
 
 (defun inf-elixir-comint-send (send-func &rest args)
   "Send ARGS (string or region) using the chosen SEND-FUNC.
