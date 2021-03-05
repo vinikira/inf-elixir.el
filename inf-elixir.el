@@ -215,6 +215,35 @@ Format the string selecting the right format using the OP-KEY."
 ;;;###autoload
 (defalias 'run-elixir #'inf-elixir-comint-run)
 
+;;;###autoload
+(defun inf-elixir-comint-project-run (&optional cmd)
+  "Run an inferior instance of some Elixir project REPL inside Emacs.
+If CMD non-nil, use it as command to invoke iex."
+  (interactive (list (if current-prefix-arg
+                       (read-from-minibuffer "Type the command: ")
+                       "")))
+  (when (not vc-mode)
+    (error "[inf-elixir] This file is not part of project"))
+
+  (let* ((default-directory (vc-root-dir))
+          (inf-elixir-buffer-name
+            (inf-elixir--project-buffer-name))
+          (cmd-splited (split-string ""))
+          (inf-elixir-program (or (car cmd-splited)
+                                inf-elixir-program))
+          (inf-elixir-args (or (cdr cmd-splited)
+                             '("-S" "mix"))))
+    (inf-elixir-comint-run)))
+
+;;;###autoload
+(defalias 'run-elixir-project #'inf-elixir-comint-project-run)
+
+(defun inf-elixir--project-buffer-name ()
+  "Extract the project name."
+  (format "%s-%s"
+    inf-elixir-buffer-name
+    (car (last (split-string (vc-root-dir) "/" t)))))
+
 (defun inf-elixir-display-version ()
   "Echo the current `inf-elixir' version."
   (interactive)
