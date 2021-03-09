@@ -31,6 +31,7 @@
 ;;; Code:
 
 (require 'comint)
+(require 'ansi-color)
 
 ;;; Custom group
 
@@ -190,7 +191,7 @@ If CMD non-nil, use it as command to invoke iex."
     (save-excursion (backward-sexp) (point)) (point))
   (inf-elixir--wait-output-filter)
   (inf-elixir--display-overlay
-    (concat " => "  inf-elixir-last-output-line)))
+    (concat " => "  (ansi-color-apply inf-elixir-last-output-line))))
 
 (defun inf-elixir-eval-buffer ()
   "Send the current buffer to the inferior Elixir process."
@@ -220,12 +221,16 @@ If CMD non-nil, use it as command to invoke iex."
 (defun inf-elixir-help (name)
   "Invoke `h NAME` operation."
   (interactive (inf-elixir--read-thing "Help"))
-  (inf-elixir--comint-send-string name 'help))
+  (inf-elixir--comint-send-string name 'help)
+  (inf-elixir--wait-output-filter)
+  (inf-elixir--show-help-buffer))
 
 (defun inf-elixir-type-help (name)
   "Invoke `t NAME` operation."
   (interactive (inf-elixir--read-thing "Type Help"))
-  (inf-elixir--comint-send-string name 'type))
+  (inf-elixir--comint-send-string name 'type)
+  (inf-elixir--wait-output-filter)
+  (inf-elixir--show-help-buffer))
 
 (defun inf-elixir-apropos (str-or-regex)
   "Invoke Elixir apropos STR-OR-REGEX operation."
@@ -284,6 +289,16 @@ If CMD non-nil, use it as command to invoke iex."
 
 ;;; Private functions
 
+(defun inf-elixir--show-help-buffer ()
+  "Show inf-elixir helper buffer."
+  (let ((buffer (get-buffer-create "*inf-elixir-help*")))
+    (with-current-buffer buffer
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert inf-elixir-last-output-text)
+        (ansi-color-apply-on-region (point-min) (point-max))
+        (display-buffer buffer 'display-buffer-pop-up-window)))))
+
 (defun inf-elixir--project-buffer-name ()
   "Extract the project name."
   (format "%s-%s"
@@ -299,10 +314,6 @@ default: 'symbol."
           (fmt (if (not str) "%s:" "%s: [%s]"))
           (prompt (format fmt (or prompt "Str: ") str)))
     (list (read-string prompt nil nil str))))
-
-(defun inf-elixir--sanatize-output (string)
-  "Sanatize output STRING."
-  (ansi-color-filter-apply string))
 
 (defun inf-elixir--syntax-table ()
   "Elixir-mode syntax table copy."
@@ -321,7 +332,9 @@ default: 'symbol."
 
 (defun inf-elixir--proc-cache-output ()
   "Parse and cache the process output."
-  (let ((text (mapconcat (lambda (str) str)
+  (let ((text (mapconcat (lambda (str)
+                           (replace-regexp-in-string
+                             inf-elixir-prompt-regexp "" str))
                 (reverse inf-elixir-proc-output-list) "")))
     (setq inf-elixir-last-output-text text
       inf-elixir-last-output-line
@@ -329,13 +342,12 @@ default: 'symbol."
 
 (defun inf-elixir--comint-preoutput-filter (string)
   "Return the output STRING."
-  (let* ((string (if (stringp string) string ""))
-          (text (inf-elixir--sanatize-output string)))
-    (push text inf-elixir-proc-output-list)
-    (when (string-match-p inf-elixir-prompt-regexp text)
+  (let* ((string (if (stringp string) string "")))
+    (push string inf-elixir-proc-output-list)
+    (when (string-match-p inf-elixir-prompt-regexp string)
       (inf-elixir--proc-cache-output)
       (setq inf-elixir-comint-filter-in-progress nil))
-    string))
+    (ansi-color-apply string)))
 
 (defun inf-elixir--comint-send (send-func &rest args)
   "Send ARGS (string or region) using the chosen SEND-FUNC.
@@ -413,6 +425,8 @@ Format the string selecting the right format using the OP-KEY."
     (define-key map (kbd "C-c C-b") #'inf-elixir-eval-buffer)
     (define-key map (kbd "C-c C-r") #'inf-elixir-eval-region)
     (define-key map (kbd "C-c C-l") #'inf-elixir-load-file)
+    (define-key map (kbd "C-c C-d") #'inf-elixir-help)
+    (define-key map (kbd "C-c C-t") #'inf-elixir-type-help)
     (define-key map (kbd "C-c C-q") #'inf-elixir-comint-quit)
     (easy-menu-define inf-clojure-minor-mode-menu map
       "Inferior Elixir Minor Mode Menu"
@@ -423,6 +437,9 @@ Format the string selecting the right format using the OP-KEY."
          ["Eval last sexp" inf-elixir-eval-last-sexp t]
          "--"
          ["Load file..." inf-elixir-load-file t]
+         "--"
+         ["Help..." inf-elixir-help t]
+         ["Type Help..." inf-elixir-type-help t]
          "--"
          ["Quit REPL" inf-elixir-comint-quit]))
     map))
