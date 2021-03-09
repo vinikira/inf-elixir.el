@@ -154,7 +154,7 @@ If CMD non-nil, use it as command to invoke iex."
   (let* ((default-directory (vc-root-dir))
           (inf-elixir-buffer-name
             (inf-elixir--project-buffer-name))
-          (cmd-splited (split-string ""))
+          (cmd-splited (split-string cmd " "))
           (inf-elixir-program (or (car cmd-splited)
                                 inf-elixir-program))
           (inf-elixir-args (or (cdr cmd-splited)
