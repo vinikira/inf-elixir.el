@@ -86,6 +86,11 @@ considered a Elixir source file by `inf-elixir-load-file'."
   :group 'inf-elixir
   :type 'bool)
 
+(defcustom inf-elixir-output-timeout 2
+  "Comint accept output timeout in seconds."
+  :group 'inf-elixir
+  :type 'integer)
+
 ;;; Variables
 
 (defvar inf-elixir-ops-alist
@@ -344,6 +349,12 @@ Possible values of SEND-FUNC are: `comint-send-string' or `comint-send-region'."
 
 (defun inf-elixir--wait-output-filter ()
   "Wait for comint output filter."
+  (run-with-timer
+    inf-elixir-output-timeout
+    nil
+    (lambda ()
+      (setq inf-elixir-comint-filter-in-progress nil)))
+
   (while inf-elixir-comint-filter-in-progress
     (sleep-for 0 10)))
 
