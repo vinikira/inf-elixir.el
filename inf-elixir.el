@@ -449,11 +449,10 @@ The following commands are available:
       (setq-local comint-input-sender #'inf-elixir--comint-input-sender)
       (when inf-elixir-enable-completion
         (push #'inf-elixir--complete completion-at-point-functions))
-      (add-hook 'pre-command-hook #'inf-elixir--delete-overlay)
-      (add-hook 'comint-preoutput-filter-functions #'inf-elixir--comint-preoutput-filter))
+      (add-hook 'pre-command-hook #'inf-elixir--delete-overlay nil t))
     (t
       (inf-elixir--delete-overlay)
-      (remove-hook 'pre-command-hook #'inf-elixir--delete-overlay))))
+      (remove-hook 'pre-command-hook #'inf-elixir--delete-overlay t))))
 
 (define-derived-mode inf-elixir-mode comint-mode "Inf-Elixir"
   "Major mode for `inf-elixir' comint buffer.
@@ -474,6 +473,9 @@ The following commands are available:
     comint-prompt-read-only inf-elixir-prompt-read-only
     comint-input-sender #'inf-elixir--comint-input-sender
     comint-get-old-input #'inf-elixir--comint-get-old-input)
+
+  (add-hook 'comint-preoutput-filter-functions
+    #'inf-elixir--comint-preoutput-filter nil t)
 
   (when (require 'elixir-mode nil t)
     (set (make-local-variable 'font-lock-defaults) '(elixir-font-lock-keywords t)))
