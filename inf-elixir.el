@@ -267,11 +267,11 @@ If CMD non-nil, use it as command to invoke iex."
 
 ;;; Overlay
 
-(defun inf-elixir--display-overlay (line)
-  "Display `inf-elixir-overlay' with the last LINE output."
+(defun inf-elixir--display-overlay (text)
+  "Display TEXT using `inf-elixir-overlay'."
   (move-overlay inf-elixir-overlay (point) (point) (current-buffer))
-  (put-text-property 0 1 'cursor t line)
-  (overlay-put inf-elixir-overlay 'after-string line))
+  (put-text-property 0 1 'cursor t text)
+  (overlay-put inf-elixir-overlay 'after-string text))
 
 (defun inf-elixir--delete-overlay ()
   "Remove `info-elixir-overlay' display (if any) prior to new user input."
