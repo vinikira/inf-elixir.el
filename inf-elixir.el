@@ -3,8 +3,8 @@
 ;; Author: Vinícius Simões <viniciussimoes@protonmail.com>
 ;; Maintainer: Vinícius Simões
 ;; Version: 0.0.1
-;; Package-Requires: (dependencies)
-;; Homepage: https://github.com/lambdart/inf-elixir.el
+;; Package-Requires: ()
+;; Homepage: https://github.com/vinikira/inf-elixir.el
 ;; Keywords: emacs elisp elixir comint
 
 
