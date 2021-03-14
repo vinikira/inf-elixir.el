@@ -96,8 +96,9 @@ considered a Elixir source file by `inf-elixir-load-file'."
 
 (defvar inf-elixir-ops-alist
   `((import-file . "import_file \"%s\"")
-     (help . "h %s")
-     (type . "t %s")
+     (help . "h(%s)")
+     (type . "t(%s)")
+     (type . "i(%s)")
      (complete . "IEx.Autocomplete.expand(Enum.reverse('%s'))"))
   "Operation associative list: (OP-KEY . OP-FMT).")
 
@@ -188,7 +189,7 @@ If CMD non-nil, use it as command to invoke iex."
   "Send the previous sexp to the inferior Elixir process."
   (interactive)
   (inf-elixir--comint-send-region
-    (save-excursion (backward-sexp) (point)) (point))
+    (save-excursion (beginning-of-line) (point)) (point))
   (inf-elixir--wait-output-filter)
   (inf-elixir--display-overlay
     (concat " => "  (ansi-color-apply inf-elixir-last-output-line))))
@@ -228,6 +229,13 @@ If CMD non-nil, use it as command to invoke iex."
 (defun inf-elixir-type-help (name)
   "Invoke `t NAME` operation."
   (interactive (inf-elixir--read-thing "Type Help"))
+  (inf-elixir--comint-send-string name 'type)
+  (inf-elixir--wait-output-filter)
+  (inf-elixir--show-help-buffer))
+
+(defun inf-elixir-info-help (name)
+  "Invoke `i NAME` operation."
+  (interactive (inf-elixir--read-thing "Info Help"))
   (inf-elixir--comint-send-string name 'type)
   (inf-elixir--wait-output-filter)
   (inf-elixir--show-help-buffer))
@@ -432,6 +440,7 @@ Format the string selecting the right format using the OP-KEY."
     (define-key map (kbd "C-c C-l") #'inf-elixir-load-file)
     (define-key map (kbd "C-c C-d") #'inf-elixir-help)
     (define-key map (kbd "C-c C-t") #'inf-elixir-type-help)
+    (define-key map (kbd "C-c C-i") #'inf-elixir-info-help)
     (define-key map (kbd "C-c C-q") #'inf-elixir-comint-quit)
     (easy-menu-define inf-clojure-minor-mode-menu map
       "Inferior Elixir Minor Mode Menu"
@@ -445,6 +454,7 @@ Format the string selecting the right format using the OP-KEY."
          "--"
          ["Help..." inf-elixir-help t]
          ["Type Help..." inf-elixir-type-help t]
+         ["Info Help..." inf-elixir-info-help t]
          "--"
          ["Quit REPL" inf-elixir-comint-quit]))
     map))
