@@ -113,7 +113,7 @@ considered a Elixir source file by `inf-elixir-load-file'."
 (defvar inf-elixir-version "0.0.1"
   "Current version string.")
 
-(defvar inf-elixir-last-output-text ""
+(defvar inf-elixir-last-output ""
   "Process (cache) last output text.")
 
 (defvar inf-elixir-last-output-line ""
@@ -260,8 +260,9 @@ If CMD non-nil, use it as command to invoke iex."
 (defun inf-elixir--get-completions ()
   "Get completions list."
   (let* ((replace-regexp "iex> \\|,\\|'\\|\\[\\|\\]\\|{\\|}\\|\:yes\\|\:no\\|\n")
+          (last-output (ansi-color-filter-apply inf-elixir-last-output))
           (sanatized-output (replace-regexp-in-string
-                              replace-regexp "" inf-elixir-last-output-text)))
+                              replace-regexp "" last-output)))
     (split-string sanatized-output)))
 
 (defun inf-elixir--get-expr ()
@@ -293,11 +294,11 @@ If CMD non-nil, use it as command to invoke iex."
   "Show inf-elixir helper buffer."
   (let ((buffer (get-buffer-create "*inf-elixir-help*")))
     (with-current-buffer buffer
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (insert inf-elixir-last-output-text)
-        (ansi-color-apply-on-region (point-min) (point-max))
-        (display-buffer buffer 'display-buffer-pop-up-window)))))
+      (erase-buffer)
+      (insert inf-elixir-last-output)
+      (ansi-color-apply-on-region (point-min) (point-max))
+      (read-only)
+      (display-buffer buffer 'display-buffer-pop-up-window))))
 
 (defun inf-elixir--project-buffer-name ()
   "Extract the project name."
@@ -336,15 +337,16 @@ default: 'symbol."
                            (replace-regexp-in-string
                              inf-elixir-prompt-regexp "" str))
                 (reverse inf-elixir-proc-output-list) "")))
-    (setq inf-elixir-last-output-text text
+    (setq inf-elixir-last-output text
       inf-elixir-last-output-line
-      (car (last (split-string inf-elixir-last-output-text "\n") 2)))))
+      (car (last (split-string inf-elixir-last-output "\n") 2)))))
 
 (defun inf-elixir--comint-preoutput-filter (string)
   "Return the output STRING."
-  (let* ((string (if (stringp string) string "")))
+  (let* ((string (if (stringp string) string ""))
+          (string-without-ansi (ansi-color-filter-apply string)))
     (push string inf-elixir-proc-output-list)
-    (when (string-match-p inf-elixir-prompt-regexp string)
+    (when (string-match-p inf-elixir-prompt-regexp string-without-ansi)
       (inf-elixir--proc-cache-output)
       (setq inf-elixir-comint-filter-in-progress nil))
     (ansi-color-apply string)))
@@ -465,7 +467,7 @@ The following commands are available:
     (inf-elixir-minor-mode
       (setq-local comint-input-sender #'inf-elixir--comint-input-sender)
       (when inf-elixir-enable-completion
-        (push #'inf-elixir--complete completion-at-point-functions))
+        (add-hook 'completion-at-point-functions #'inf-elixir--complete nil t))
       (add-hook 'pre-command-hook #'inf-elixir--delete-overlay nil t))
     (t
       (inf-elixir--delete-overlay)
