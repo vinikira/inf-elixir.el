@@ -294,10 +294,15 @@ If CMD non-nil, use it as command to invoke iex."
   "Show inf-elixir helper buffer."
   (let ((buffer (get-buffer-create "*inf-elixir-help*")))
     (with-current-buffer buffer
+      (read-only-mode -1)
       (erase-buffer)
       (insert inf-elixir-last-output)
       (ansi-color-apply-on-region (point-min) (point-max))
-      (read-only)
+      (goto-char (point-min))
+      (save-excursion
+        (while (re-search-forward inf-elixir-prompt-regexp nil t)
+          (replace-match "")))
+      (help-mode)
       (display-buffer buffer 'display-buffer-pop-up-window))))
 
 (defun inf-elixir--project-buffer-name ()
@@ -333,9 +338,7 @@ default: 'symbol."
 
 (defun inf-elixir--proc-cache-output ()
   "Parse and cache the process output."
-  (let ((text (mapconcat (lambda (str)
-                           (replace-regexp-in-string
-                             inf-elixir-prompt-regexp "" str))
+  (let ((text (mapconcat (lambda (str) str)
                 (reverse inf-elixir-proc-output-list) "")))
     (setq inf-elixir-last-output text
       inf-elixir-last-output-line
