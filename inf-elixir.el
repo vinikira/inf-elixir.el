@@ -82,7 +82,7 @@ considered a Elixir source file by `inf-elixir-load-file'."
   :group 'inf-elixir
   :type '(repeat function))
 
-(defcustom inf-elixir-enable-completion t
+(defcustom inf-elixir-enable-completion nil
   "If no-nil, enables the completions using iex."
   :group 'inf-elixir
   :type 'bool)
@@ -258,7 +258,7 @@ If CMD non-nil, use it as command to invoke iex."
 
 ;;; Complete
 
-(defun inf-elixir--complete ()
+(defun inf-elixir--complete-at-point ()
   "Invoke completions for elixir expressions."
   (let* ((expr (inf-elixir--get-expr)))
     (inf-elixir--comint-send-string expr 'complete)
@@ -480,7 +480,7 @@ The following commands are available:
     (inf-elixir-minor-mode
       (setq-local comint-input-sender #'inf-elixir--comint-input-sender)
       (when inf-elixir-enable-completion
-        (add-hook 'completion-at-point-functions #'inf-elixir--complete nil t))
+        (add-hook 'completion-at-point-functions #'inf-elixir--complete-at-point 'append t))
       (add-hook 'pre-command-hook #'inf-elixir--delete-overlay nil t))
     (t
       (inf-elixir--delete-overlay)
