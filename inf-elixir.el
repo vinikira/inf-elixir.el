@@ -155,10 +155,9 @@ If CMD non-nil, use it as command to invoke iex."
   (interactive (list (if current-prefix-arg
                        (read-from-minibuffer "Type the command: ")
                        "")))
-  (when (not vc-mode)
-    (error "[inf-elixir] This file is not part of project"))
 
-  (let* ((default-directory (vc-root-dir))
+  (let* ((default-directory (or (vc-root-dir)
+                              (read-directory-name "Select the project root: ")))
           (inf-elixir-buffer-name
             (inf-elixir--project-buffer-name))
           (cmd-splited (split-string cmd " "))
@@ -317,7 +316,7 @@ If CMD non-nil, use it as command to invoke iex."
   "Extract the project name."
   (format "%s-%s"
     inf-elixir-buffer-name
-    (car (last (split-string (vc-root-dir) "/" t)))))
+    (car (last (split-string default-directory "/" t)))))
 
 (defun inf-elixir--read-thing (&optional prompt thing)
   "Return `thing-at-point' (string) or read it.
