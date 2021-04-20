@@ -429,6 +429,7 @@ Format the string selecting the right format using the OP-KEY."
          ["Version" inf-elixir-display-version]))
     map))
 
+;;; Inf Elixir minor mode definition
 (defvar inf-elixir-minor-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-M-x") #'inf-elixir-eval-def)
@@ -441,7 +442,7 @@ Format the string selecting the right format using the OP-KEY."
     (define-key map (kbd "C-c C-t") #'inf-elixir-type-help)
     (define-key map (kbd "C-c C-i") #'inf-elixir-info-help)
     (define-key map (kbd "C-c C-q") #'inf-elixir-comint-quit)
-    (easy-menu-define inf-clojure-minor-mode-menu map
+    (easy-menu-define inf-elixir-minor-mode-menu map
       "Inferior Elixir Minor Mode Menu"
       '("Inf-Elixir"
          ["Eval region" inf-elixir-eval-region t]
@@ -457,8 +458,6 @@ Format the string selecting the right format using the OP-KEY."
          "--"
          ["Quit REPL" inf-elixir-comint-quit]))
     map))
-
-;;; Mode definition
 
 ;;;###autoload
 (define-minor-mode inf-elixir-minor-mode
@@ -485,6 +484,19 @@ The following commands are available:
       (inf-elixir--delete-overlay)
       (remove-hook 'pre-command-hook #'inf-elixir--delete-overlay t))))
 
+;; Inf Elixir mode
+(defvar inf-elixir-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "\t" #'completion-at-point)
+    (define-key map (kbd "C-c C-q") #'inf-elixir-comint-quit)
+    (easy-menu-define inf-elixir-mode-menu map
+      "Inferior Elixir Minor Mode Menu"
+      '("Inf-Elixir"
+         ["Load file..." inf-elixir-load-file t]
+         "--"
+         ["Quit REPL" inf-elixir-comint-quit]))
+    map))
+
 (define-derived-mode inf-elixir-mode comint-mode "Inf-Elixir"
   "Major mode for `inf-elixir' comint buffer.
 Runs a Elixir interpreter with the help of comint-mode,
@@ -499,11 +511,15 @@ The following commands are available:
 \\{inf-elixir-minor-mode-map}"
   :group 'inf-elixir
   :syntax-table (inf-elixir--syntax-table)
+  :keymap inf-elixir-mode-map
 
   (setq comint-prompt-regexp inf-elixir-prompt-regexp
     comint-prompt-read-only inf-elixir-prompt-read-only
     comint-input-sender #'inf-elixir--comint-input-sender
     comint-get-old-input #'inf-elixir--comint-get-old-input)
+
+  (add-hook 'completion-at-point-functions
+    #'inf-elixir--complete-at-point 'append t)
 
   (add-hook 'comint-preoutput-filter-functions
     #'inf-elixir--comint-preoutput-filter nil t)
