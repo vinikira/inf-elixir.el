@@ -8,7 +8,7 @@ An inferior Elixir mode for Emacs.
 Clone Inf Elixir repository to an arbitrary location:
 
 #+begin_src sh
-  $ git clone https://github.com/vinikira/inf-elixir.el ~/.emacs.d/site-elisp/inf-clojure
+  $ git clone https://github.com/vinikira/inf-elixir.el ~/.emacs.d/site-elisp/inf-elixir
 #+end_src
 
 Add Inf Elixir directory to load-path in your Emacs initialization file (init.el) and load it.
@@ -17,7 +17,7 @@ Add Inf Elixir directory to load-path in your Emacs initialization file (init.el
   ;; add to load-path
   (add-to-list 'load-path "/replace/me/to/inf-elixir/full/path")
 
-  ;; load inf-clojure feature
+  ;; load inf-elixir feature
   (require 'inf-elixir nil t)
 #+end_src
 
@@ -26,6 +26,6 @@ Note: To see all the options from Emacs directly, and to customize it, just
 type: M-x customize-group RET inf-elixir RET.
 
 * References
-- https://github.com/lambdart/inf-clojure
+- https://github.com/lambdart/inf-
 - https://github.com/J3RN/inf-elixir
 - https://github.com/tonini/alchemist.el
