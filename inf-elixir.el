@@ -522,7 +522,10 @@ The following commands are available:
     #'inf-elixir--complete-at-point 'append t)
 
   (add-hook 'comint-preoutput-filter-functions
-    #'inf-elixir--comint-preoutput-filter nil t)
+    #'inf-elixir--comint-preoutput-filter 'append t)
+
+  (add-hook 'comint-output-filter-functions
+    #'comint-truncate-buffer 'append t)
 
   (when (require 'elixir-mode nil t)
     (set (make-local-variable 'font-lock-defaults) '(elixir-font-lock-keywords t)))
