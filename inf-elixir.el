@@ -36,7 +36,7 @@
 ;;; Custom group
 
 (defgroup inf-elixir nil
-  "Elixir comint/inferior functionalites."
+  "Elixir comint/inferior functionalities."
   :prefix "inf-elixir-"
   :group 'elixir)
 
@@ -75,7 +75,7 @@
   :group 'info-elixir
   :type 'string)
 
-(defcustom inf-elixir-source-modes '(elixir-mode)
+(defcustom inf-elixir-source-modes '(elixir-mode elixir-ts-mode)
   "Used to determine if a buffer contains Elixir sourc code.
 If it's loaded into a buffer that is in one of these major modes, it's
 considered a Elixir source file by `inf-elixir-load-file'."
@@ -176,7 +176,7 @@ If CMD non-nil, use it as command to invoke iex."
   (message "inf-elixir (version %s)" inf-elixir-version))
 
 (defun inf-elixir-eval-def ()
-  "Send 'def' to the inferior Elixir process."
+  "Send a def to the inferior Elixir process."
   (interactive)
   (save-excursion
     (end-of-defun)
@@ -242,7 +242,7 @@ If CMD non-nil, use it as command to invoke iex."
 (defun inf-elixir-apropos (str-or-regex)
   "Invoke Elixir apropos STR-OR-REGEX operation."
   (interactive (inf-elixir--read-thing "Search for"))
-  ;; (inf-elixir--comint-send-string str-or-regex 'apropos)
+  (inf-elixir--comint-send-string str-or-regex 'apropos)
   (error "Not implemented yet"))
 
 (defun inf-elixir-comint-quit ()
@@ -319,7 +319,7 @@ If CMD non-nil, use it as command to invoke iex."
     (car (last (split-string default-directory "/" t)))))
 
 (defun inf-elixir--read-thing (&optional prompt thing)
-  "Return `thing-at-point' (string) or read it.
+  "Return `thing-at-point' string or read it.
 If PROMPT is non-nil use it as the read prompt.
 If THING  is non-nil use it as the `thing-at-point' parameter,
 default: 'symbol."
@@ -327,12 +327,6 @@ default: 'symbol."
           (fmt (if (not str) "%s:" "%s: [%s]"))
           (prompt (format fmt (or prompt "Str: ") str)))
     (list (read-string prompt nil nil str))))
-
-(defun inf-elixir--syntax-table ()
-  "Elixir-mode syntax table copy."
-  (and (require 'elixir-mode nil t)
-    (boundp 'elixir-mode-syntax-table)
-    (copy-syntax-table elixir-mode-syntax-table)))
 
 (defun inf-elixir--proc ()
   "Return comint buffer current process."
@@ -499,10 +493,11 @@ The following commands are available:
 
 (define-derived-mode inf-elixir-mode comint-mode "Inf-Elixir"
   "Major mode for `inf-elixir' comint buffer.
-Runs a Elixir interpreter with the help of comint-mode,
+Runs a Elixir interpreter with the help of `comint-mode',
 use the buffer abstraction as the main I/O bridge between
 Emacs and the subprocess.
-You can send text to the inferior Elixir process from other buffers or the `minibuffer'
+You can send text to the inferior Elixir process from other
+buffers or the `minibuffer'
 directly.
     `inf-elixir-eval-defn'  sends function definition
     `inf-elixir-eval-region' sends the current region
@@ -510,7 +505,6 @@ directly.
 The following commands are available:
 \\{inf-elixir-minor-mode-map}"
   :group 'inf-elixir
-  :syntax-table (inf-elixir--syntax-table)
   :keymap inf-elixir-mode-map
 
   (setq comint-prompt-regexp inf-elixir-prompt-regexp
@@ -527,8 +521,6 @@ The following commands are available:
   (add-hook 'comint-output-filter-functions
     #'comint-truncate-buffer 'append t)
 
-  (when (require 'elixir-mode nil t)
-    (set (make-local-variable 'font-lock-defaults) '(elixir-font-lock-keywords t)))
   (set (make-local-variable 'paragraph-separate) "\\'")
   (set (make-local-variable 'paragraph-start) inf-elixir-prompt-regexp))
 
