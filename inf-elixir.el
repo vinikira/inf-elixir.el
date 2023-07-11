@@ -151,20 +151,21 @@ considered a Elixir source file by `inf-elixir-load-file'."
 ;;;###autoload
 (defun inf-elixir-comint-project-run (&optional cmd)
   "Run an inferior instance of some Elixir project REPL inside Emacs.
-If CMD non-nil, use it as command to invoke iex."
+If CMD non-nil, ask for the custom command to invoke iex."
   (interactive (list (if current-prefix-arg
                        (read-from-minibuffer "Type the command: ")
                        "")))
-
   (let* ((default-directory (or (vc-root-dir)
                               (read-directory-name "Select the project root: ")))
           (inf-elixir-buffer-name
             (inf-elixir--project-buffer-name))
           (cmd-splited (split-string cmd " "))
-          (inf-elixir-program (or (car cmd-splited)
-                                inf-elixir-program))
-          (inf-elixir-args (or (cdr cmd-splited)
-                             '("-S" "mix"))))
+          (inf-elixir-program (if (string-empty-p cmd)
+                                inf-elixir-program
+                                (car cmd-splited)))
+          (inf-elixir-args (if (string-empty-p cmd)
+                             '("-S" "mix")
+                             (cdr cmd-splited))))
     (inf-elixir-comint-run)))
 
 ;;;###autoload
