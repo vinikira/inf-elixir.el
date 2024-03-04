@@ -160,12 +160,18 @@ If CMD non-nil, ask for the custom command to invoke iex."
           (inf-elixir-buffer-name
             (inf-elixir--project-buffer-name))
           (cmd-splited (split-string cmd " "))
-          (inf-elixir-program (if (string-empty-p cmd)
-                                inf-elixir-program
-                                (car cmd-splited)))
-          (inf-elixir-args (if (string-empty-p cmd)
-                             '("-S" "mix")
-                             (cdr cmd-splited))))
+          (inf-elixir-program (cond
+                                ((not (string-empty-p cmd))
+                                  (car cmd-splited))
+                                (t
+                                  inf-elixir-program)))
+          (inf-elixir-args (cond
+                             ((not (string-empty-p cmd))
+                               (cdr cmd-splited))
+                             ((not (eq inf-elixir-args '()))
+                               inf-elixir-args)
+                             (t
+                               '("-S" "mix")))))
     (inf-elixir-comint-run)))
 
 ;;;###autoload
