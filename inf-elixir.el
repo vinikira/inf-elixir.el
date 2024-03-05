@@ -98,7 +98,7 @@ considered a Elixir source file by `inf-elixir-load-file'."
   `((import-file . "import_file \"%s\"")
      (help . "h(%s)")
      (type . "t(%s)")
-     (type . "i(%s)")
+     (info . "i(%s)")
      (complete . "IEx.Autocomplete.expand(Enum.reverse('%s'))"))
   "Operation associative list: (OP-KEY . OP-FMT).")
 
@@ -242,7 +242,7 @@ If CMD non-nil, ask for the custom command to invoke iex."
 (defun inf-elixir-info-help (name)
   "Invoke `i NAME` operation."
   (interactive (inf-elixir--read-thing "Info Help"))
-  (inf-elixir--comint-send-string name 'type)
+  (inf-elixir--comint-send-string name 'info)
   (inf-elixir--wait-output-filter)
   (inf-elixir--show-help-buffer))
 
@@ -331,7 +331,7 @@ If PROMPT is non-nil use it as the read prompt.
 If THING  is non-nil use it as the `thing-at-point' parameter,
 default: 'symbol."
   (let* ((str (thing-at-point (or thing 'symbol) t))
-          (fmt (if (not str) "%s:" "%s: [%s]"))
+          (fmt (if (not str) "%s: " "%s (default %s): "))
           (prompt (format fmt (or prompt "Str: ") str)))
     (list (read-string prompt nil nil str))))
 
