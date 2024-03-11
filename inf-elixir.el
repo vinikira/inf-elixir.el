@@ -60,13 +60,15 @@
   :group 'inf-elixir
   :type 'regexp)
 
-(defcustom inf-elixir-program (executable-find "iex")
+(defcustom inf-elixir-iex-executable "iex"
   "Elixir executable full path program."
   :group 'inf-elixir
-  :type 'string)
+  :type 'file
+  :set `(lambda (symbol value)
+          (set symbol (or (executable-find value) value))))
 
 (defcustom inf-elixir-args '()
-  "Command-line arguments to pass to `inf-elixir-program'."
+  "Command-line arguments to pass to `inf-elixir-iex-executable'."
   :group 'inf-elixir
   :type 'list)
 
@@ -134,7 +136,7 @@ considered a Elixir source file by `inf-elixir-load-file'."
   (interactive)
   (let ((buffer (apply 'make-comint
                   inf-elixir-buffer-name
-                  inf-elixir-program
+                  inf-elixir-iex-executable
                   inf-elixir-start-file
                   inf-elixir-args)))
     (unless buffer
@@ -160,11 +162,11 @@ If CMD non-nil, ask for the custom command to invoke iex."
           (inf-elixir-buffer-name
             (inf-elixir--project-buffer-name))
           (cmd-splited (split-string cmd " "))
-          (inf-elixir-program (cond
+          (inf-elixir-iex-executable (cond
                                 ((not (string-empty-p cmd))
                                   (car cmd-splited))
                                 (t
-                                  inf-elixir-program)))
+                                  inf-elixir-iex-executable)))
           (inf-elixir-args (cond
                              ((not (string-empty-p cmd))
                                (cdr cmd-splited))
