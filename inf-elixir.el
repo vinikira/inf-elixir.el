@@ -199,11 +199,11 @@ If CMD non-nil, ask for the custom command to invoke iex."
 (defun inf-elixir-eval-last-sexp ()
   "Send the previous sexp to the inferior Elixir process."
   (interactive)
-  (inf-elixir--comint-send-region
-    (save-excursion (beginning-of-line) (point)) (point))
+  (inf-elixir--comint-send-string (thing-at-point 'sexp))
   (inf-elixir--wait-output-filter)
-  (inf-elixir--display-overlay
-    (concat " => "  (ansi-color-apply inf-elixir-last-output-line))))
+  (when inf-elixir-minor-mode
+    (inf-elixir--display-overlay
+      (concat " => "  (ansi-color-apply inf-elixir-last-output-line)))))
 
 (defun inf-elixir-eval-buffer ()
   "Send the current buffer to the inferior Elixir process."
