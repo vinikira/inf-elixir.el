@@ -32,6 +32,7 @@
 
 (require 'comint)
 (require 'ansi-color)
+(require 'project)
 
 ;;; Custom group
 
@@ -157,16 +158,18 @@ If CMD non-nil, ask for the custom command to invoke iex."
   (interactive (list (if current-prefix-arg
                        (read-from-minibuffer "Type the command: ")
                        "")))
-  (let* ((default-directory (or (vc-root-dir)
-                              (read-directory-name "Select the project root: ")))
+  (let* ((project (project-current))
+          (default-directory (if project
+                               (project-root project)
+                               (read-directory-name "Select the project root: ")))
           (inf-elixir-buffer-name
             (inf-elixir--project-buffer-name))
           (cmd-splited (split-string cmd " "))
           (inf-elixir-iex-executable (cond
-                                ((not (string-empty-p cmd))
-                                  (car cmd-splited))
-                                (t
-                                  inf-elixir-iex-executable)))
+                                       ((not (string-empty-p cmd))
+                                         (car cmd-splited))
+                                       (t
+                                         inf-elixir-iex-executable)))
           (inf-elixir-args (cond
                              ((not (string-empty-p cmd))
                                (cdr cmd-splited))
