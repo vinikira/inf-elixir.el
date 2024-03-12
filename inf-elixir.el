@@ -33,6 +33,7 @@
 (require 'comint)
 (require 'ansi-color)
 (require 'project)
+(require 'thingatpt)
 
 ;;; Custom group
 
@@ -102,7 +103,7 @@ considered a Elixir source file by `inf-elixir-load-file'."
      (help . "h(%s)")
      (type . "t(%s)")
      (info . "i(%s)")
-     (complete . "IEx.Autocomplete.expand(Enum.reverse('%s'))"))
+     (complete . "case IEx.Autocomplete.expand(Enum.reverse('%s')), do: ({:yes, e, []} -> [to_string(e)]; {:yes, [], o} -> Enum.map(o, &to_string/1); _ -> [])"))
   "Operation associative list: (OP-KEY . OP-FMT).")
 
 (defvar inf-elixir-overlay (make-overlay (point-min) (point-min) nil t t)
@@ -128,6 +129,9 @@ considered a Elixir source file by `inf-elixir-load-file'."
 
 (defvar inf-elixir-comint-filter-in-progress nil
   "Check if filter is running.")
+
+(defvar inf-elixir-comint-completion-in-progress nil
+  "Check if completion is running.")
 
 ;;; Commands
 
@@ -232,7 +236,7 @@ If CMD non-nil, ask for the custom command to invoke iex."
 
 (defun inf-elixir-doc-help (name)
   "Invoke `h NAME` operation."
-  (interactive (inf-elixir--read-thing "Help"))
+  (interactive (inf-elixir--read-thing "Documentation Help"))
   (inf-elixir--comint-send-string name 'help)
   (inf-elixir--wait-output-filter)
   (inf-elixir--show-help-buffer))
@@ -271,14 +275,18 @@ If CMD non-nil, ask for the custom command to invoke iex."
 
 (defun inf-elixir--complete-at-point ()
   "Invoke completions for elixir expressions."
-  (let* ((expr (inf-elixir--get-expr)))
-    (inf-elixir--comint-send-string expr 'complete)
+  (let ((expr (inf-elixir--get-expr)))
+    (inf-elixir--clear-cache)
+    (setq inf-elixir-comint-completion-in-progress t)
+    (inf-elixir--comint-send-string (nth 2 expr) 'complete)
     (inf-elixir--wait-output-filter)
-    (list (point) (point) (inf-elixir--get-completions))))
+    (setq inf-elixir-comint-completion-in-progress nil)
+    (list (nth 0 expr) (nth 1 expr) (inf-elixir--get-completions))))
 
 (defun inf-elixir--get-completions ()
   "Get completions list."
-  (let* ((replace-regexp "iex> \\|,\\|'\\|\\[\\|\\]\\|{\\|}\\|\:yes\\|\:no\\|\n")
+  (let* ((replace-regexp
+           "^\\(iex\\|\\.\\.\\.\\).*>\\|,\\|'\\|\"\\|\\[\\|\\]\\|{\\|}\\|\:yes\\|\:no\\|\n")
           (last-output (ansi-color-filter-apply inf-elixir-last-output))
           (sanatized-output (replace-regexp-in-string
                               replace-regexp "" last-output)))
@@ -287,13 +295,15 @@ If CMD non-nil, ask for the custom command to invoke iex."
 (defun inf-elixir--get-expr ()
   "Return the expression under the cursor."
   (if (or (looking-at "\s") (eolp))
-    (let (p1 p2 (skip-chars "-_A-Za-z0-9.?!@:"))
+    (let (p1 p2 p3 (skip-chars "-_A-Za-z0-9.?!@:"))
       (save-excursion
         (skip-chars-backward skip-chars)
         (setq p1 (point))
         (skip-chars-forward skip-chars)
         (setq p2 (point))
-        (buffer-substring-no-properties p1 p2)))))
+        (thing-at-point--beginning-of-symbol)
+        (setq p3 (point))
+        `(,p3 ,p2 ,(buffer-substring-no-properties p1 p2))))))
 
 ;;; Overlay
 
@@ -308,6 +318,11 @@ If CMD non-nil, ask for the custom command to invoke iex."
   (delete-overlay inf-elixir-overlay))
 
 ;;; Private functions
+
+(defun inf-elixir--clear-cache ()
+  "Clear the caches"
+  (setq inf-elixir-last-output ""
+    inf-elixir-last-output-line ""))
 
 (defun inf-elixir--show-help-buffer ()
   "Show inf-elixir helper buffer."
@@ -365,7 +380,9 @@ default: 'symbol."
     (when (string-match-p inf-elixir-prompt-regexp string-without-ansi)
       (inf-elixir--proc-cache-output)
       (setq inf-elixir-comint-filter-in-progress nil))
-    (ansi-color-apply string)))
+    (if inf-elixir-comint-completion-in-progress
+      ""
+      (ansi-color-apply string))))
 
 (defun inf-elixir--comint-send (send-func &rest args)
   "Send ARGS (string or region) using the chosen SEND-FUNC.
@@ -427,6 +444,9 @@ Format the string selecting the right format using the OP-KEY."
 
 (defvar inf-elixir-mode-map
   (let ((map (copy-keymap comint-mode-map)))
+    (when inf-elixir-enable-completion
+      (define-key map "\t" #'completion-at-point)
+      (define-key map (kbd "TAB") #'completion-at-point))
     (define-key map (kbd "C-x C-e") #'inf-elixir-eval-last-sexp)
     (define-key map (kbd "C-c C-l") #'inf-elixir-load-file)
     (define-key map (kbd "C-c C-q") #'inf-elixir-comint-quit)
