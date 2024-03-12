@@ -388,6 +388,13 @@ Possible values of SEND-FUNC are: `comint-send-string' or `comint-send-region'."
   (while inf-elixir-comint-filter-in-progress
     (sleep-for 0 10)))
 
+(defun inf-elixir--spot-prompt (_string)
+  "Move the point to the process mark."
+  (let ((proc (get-buffer-process (current-buffer))))
+    (when proc
+      (save-excursion
+        (goto-char (process-mark proc))))))
+
 (defun inf-elixir--comint-send-string (string &optional op-key)
   "Send STRING to the current inferior process.
 Format the string selecting the right format using the OP-KEY."
@@ -532,6 +539,8 @@ The following commands are available:
 
   (add-hook 'comint-output-filter-functions
     #'comint-truncate-buffer 'append t)
+  (add-hook 'comint-output-filter-functions
+    #'inf-elixir--spot-prompt 100 t)
 
   (set (make-local-variable 'paragraph-separate) "\\'")
   (set (make-local-variable 'paragraph-start) inf-elixir-prompt-regexp))
