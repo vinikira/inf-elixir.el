@@ -1,4 +1,4 @@
-;;; inf-elixir.el --- summary -*- lexical-binding: t -*-
+;;; inf-elixir.el --- An elixir inferior mode -*- lexical-binding: t -*-
 
 ;; Author: Vinícius Simões <viniciussimoes@protonmail.com>
 ;; Maintainer: Vinícius Simões
