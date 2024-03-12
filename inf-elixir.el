@@ -230,7 +230,7 @@ If CMD non-nil, ask for the custom command to invoke iex."
       (file-name-nondirectory file-name)))
   (inf-elixir--comint-send-string file-name 'import-file))
 
-(defun inf-elixir-help (name)
+(defun inf-elixir-doc-help (name)
   "Invoke `h NAME` operation."
   (interactive (inf-elixir--read-thing "Help"))
   (inf-elixir--comint-send-string name 'help)
@@ -445,16 +445,15 @@ Format the string selecting the right format using the OP-KEY."
 ;;; Inf Elixir minor mode definition
 (defvar inf-elixir-minor-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-M-x") #'inf-elixir-eval-def)
-    (define-key map (kbd "C-c C-e") #'inf-elixir-eval-last-sexp)
-    (define-key map (kbd "C-x C-e") #'inf-elixir-eval-last-sexp)
-    (define-key map (kbd "C-c C-b") #'inf-elixir-eval-buffer)
+    (define-key map (kbd "C-M-x") #'inf-elixir-eval-def) ;; Emacs convention
+    (define-key map (kbd "C-x C-e") #'inf-elixir-eval-last-sexp) ;; Emacs convention
+    (define-key map (kbd "C-c C-e") #'inf-elixir-eval-buffer) ;; Emacs convention
     (define-key map (kbd "C-c C-r") #'inf-elixir-eval-region)
-    (define-key map (kbd "C-c C-l") #'inf-elixir-load-file)
-    (define-key map (kbd "C-c C-d") #'inf-elixir-help)
-    (define-key map (kbd "C-c C-t") #'inf-elixir-type-help)
-    (define-key map (kbd "C-c C-i") #'inf-elixir-info-help)
-    (define-key map (kbd "C-c C-q") #'inf-elixir-comint-quit)
+    (define-key map (kbd "C-c C-c l") #'inf-elixir-load-file)
+    (define-key map (kbd "C-c C-c h h") #'inf-elixir-doc-help)
+    (define-key map (kbd "C-c C-c h t") #'inf-elixir-type-help)
+    (define-key map (kbd "C-c C-c h i") #'inf-elixir-info-help)
+    (define-key map (kbd "C-c C-c q") #'inf-elixir-comint-quit)
     (easy-menu-define inf-elixir-minor-mode-menu map
       "Inferior Elixir Minor Mode Menu"
       '("Inf-Elixir"
@@ -465,7 +464,7 @@ Format the string selecting the right format using the OP-KEY."
          "--"
          ["Load file..." inf-elixir-load-file t]
          "--"
-         ["Help..." inf-elixir-help t]
+         ["Doc Help..." inf-elixir-doc-help t]
          ["Type Help..." inf-elixir-type-help t]
          ["Info Help..." inf-elixir-info-help t]
          "--"
