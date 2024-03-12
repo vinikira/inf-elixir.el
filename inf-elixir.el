@@ -491,7 +491,7 @@ The following commands are available:
     (inf-elixir-minor-mode
       (setq-local comint-input-sender #'inf-elixir--comint-input-sender)
       (when inf-elixir-enable-completion
-        (add-hook 'completion-at-point-functions #'inf-elixir--complete-at-point 'append t))
+        (add-hook 'completion-at-point-functions #'inf-elixir--complete-at-point 100 t))
       (add-hook 'pre-command-hook #'inf-elixir--delete-overlay nil t))
     (t
       (inf-elixir--delete-overlay)
@@ -526,19 +526,21 @@ The following commands are available:
   :group 'inf-elixir
   :keymap inf-elixir-mode-map
 
-  (setq comint-prompt-regexp inf-elixir-prompt-regexp
+  (setq-local
+    comint-prompt-regexp inf-elixir-prompt-regexp
     comint-prompt-read-only inf-elixir-prompt-read-only
     comint-input-sender #'inf-elixir--comint-input-sender
     comint-get-old-input #'inf-elixir--comint-get-old-input)
 
   (add-hook 'completion-at-point-functions
-    #'inf-elixir--complete-at-point 'append t)
+    #'inf-elixir--complete-at-point -100 t)
 
   (add-hook 'comint-preoutput-filter-functions
-    #'inf-elixir--comint-preoutput-filter 'append t)
+    #'inf-elixir--comint-preoutput-filter 100 t)
 
   (add-hook 'comint-output-filter-functions
-    #'comint-truncate-buffer 'append t)
+    #'comint-truncate-buffer 100 t)
+
   (add-hook 'comint-output-filter-functions
     #'inf-elixir--spot-prompt 100 t)
 
