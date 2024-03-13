@@ -104,6 +104,7 @@ considered a Elixir source file by `inf-elixir-load-file'."
      (type . "t(%s)")
      (info . "i(%s)")
      (complete . "case IEx.Autocomplete.expand(Enum.reverse('%s')), do: ({:yes, e, []} -> [to_string(e)]; {:yes, [], o} -> Enum.map(o, &to_string/1); _ -> [])"))
+     (behaviour . "b(%s)")
   "Operation associative list: (OP-KEY . OP-FMT).")
 
 (defvar inf-elixir-overlay (make-overlay (point-min) (point-min) nil t t)
@@ -252,6 +253,13 @@ If CMD non-nil, ask for the custom command to invoke iex."
   "Invoke `i NAME` operation."
   (interactive (inf-elixir--read-thing "Info Help"))
   (inf-elixir--comint-send-string name 'info)
+  (inf-elixir--wait-output-filter)
+  (inf-elixir--show-help-buffer))
+
+(defun inf-elixir-info-behaviour-help (name)
+  "Invoke `b NAME` operation."
+  (interactive (inf-elixir--read-thing "Behaviour Help"))
+  (inf-elixir--comint-send-string name 'behaviour)
   (inf-elixir--wait-output-filter)
   (inf-elixir--show-help-buffer))
 
@@ -473,6 +481,7 @@ Format the string selecting the right format using the OP-KEY."
     (define-key map (kbd "C-c C-c h h") #'inf-elixir-doc-help)
     (define-key map (kbd "C-c C-c h t") #'inf-elixir-type-help)
     (define-key map (kbd "C-c C-c h i") #'inf-elixir-info-help)
+    (define-key map (kbd "C-c C-c h b") #'inf-elixir-info-behaviour-help)
     (define-key map (kbd "C-c C-c q") #'inf-elixir-comint-quit)
     (easy-menu-define inf-elixir-minor-mode-menu map
       "Inferior Elixir Minor Mode Menu"
@@ -487,6 +496,7 @@ Format the string selecting the right format using the OP-KEY."
          ["Doc Help..." inf-elixir-doc-help t]
          ["Type Help..." inf-elixir-type-help t]
          ["Info Help..." inf-elixir-info-help t]
+         ["Behaviour Help..." inf-elixir-info-behaviour-help t]
          "--"
          ["Quit REPL" inf-elixir-comint-quit]))
     map))
