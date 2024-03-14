@@ -353,15 +353,24 @@ If CMD non-nil, ask for the custom command to invoke iex."
     inf-elixir-buffer-name
     (car (last (split-string default-directory "/" t)))))
 
-(defun inf-elixir--read-thing (&optional prompt thing)
-  "Return `thing-at-point' string or read it.
-If PROMPT is non-nil use it as the read prompt.
-If THING  is non-nil use it as the `thing-at-point' parameter,
-default: 'symbol."
-  (let* ((str (thing-at-point (or thing 'symbol) t))
+(defun inf-elixir--read-thing (&optional prompt)
+  "Prompt the user using the PROMPT about the thing to select.
+Tries to infer the full module name if the thing is a module."
+  (let* ((str (inf-elixir--full-module-name))
           (fmt (if (not str) "%s: " "%s (default %s): "))
           (prompt (format fmt (or prompt "Str: ") str)))
     (list (read-string prompt nil nil str))))
+
+(defun inf-elixir--full-module-name ()
+  "Try to infer the aliases of the current symbol."
+  (let* ((buffer-str (buffer-substring-no-properties
+                       (point-min)
+                       (point-max)))
+          (symbol (thing-at-point 'symbol))
+          (regexp (format "alias \\(.+?%s\\)$" symbol)))
+    (if (string-match regexp buffer-str (point-min))
+      (match-string 1 buffer-str)
+      symbol)))
 
 (defun inf-elixir--proc ()
   "Return comint buffer current process."
