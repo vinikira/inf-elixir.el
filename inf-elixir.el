@@ -383,11 +383,16 @@ default: 'symbol."
 (defun inf-elixir--comint-preoutput-filter (string)
   "Return the output STRING."
   (let* ((string (if (stringp string) string ""))
-          (string-without-ansi (ansi-color-filter-apply string)))
+          (string-without-ansi (ansi-color-filter-apply string))
+          (match-prompt? (string-match-p inf-elixir-prompt-regexp string-without-ansi)))
     (push string inf-elixir-proc-output-list)
-    (when (string-match-p inf-elixir-prompt-regexp string-without-ansi)
+    (when match-prompt?
       (inf-elixir--proc-cache-output)
       (setq inf-elixir-comint-filter-in-progress nil))
+    (when (and
+            (null inf-elixir-comint-filter-in-progress)
+            (not match-prompt?))
+      (inf-elixir--comint-send-string ""))
     (if inf-elixir-comint-completion-in-progress
       ""
       (ansi-color-apply string))))
