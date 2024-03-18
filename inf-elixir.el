@@ -1,9 +1,9 @@
-;;; inf-elixir.el --- summary -*- lexical-binding: t -*-
+;;; inf-elixir.el --- An elixir inferior mode -*- lexical-binding: t -*-
 
 ;; Author: Vinícius Simões <viniciussimoes@protonmail.com>
 ;; Maintainer: Vinícius Simões
 ;; Version: 0.0.1
-;; Package-Requires: ()
+;; Package-Requires: ((emacs . "29.1"))
 ;; Homepage: https://github.com/vinikira/inf-elixir.el
 ;; Keywords: emacs elisp elixir comint
 
@@ -32,6 +32,9 @@
 
 (require 'comint)
 (require 'ansi-color)
+(require 'project)
+(require 'thingatpt)
+(require 'treesit)
 
 ;;; Custom group
 
@@ -60,13 +63,15 @@
   :group 'inf-elixir
   :type 'regexp)
 
-(defcustom inf-elixir-program (executable-find "iex")
+(defcustom inf-elixir-iex-executable "iex"
   "Elixir executable full path program."
   :group 'inf-elixir
-  :type 'string)
+  :type 'file
+  :set `(lambda (symbol value)
+          (set symbol (or (executable-find value) value))))
 
 (defcustom inf-elixir-args '()
-  "Command-line arguments to pass to `inf-elixir-program'."
+  "Command-line arguments to pass to `inf-elixir-iex-executable'."
   :group 'inf-elixir
   :type 'list)
 
@@ -99,7 +104,8 @@ considered a Elixir source file by `inf-elixir-load-file'."
      (help . "h(%s)")
      (type . "t(%s)")
      (info . "i(%s)")
-     (complete . "IEx.Autocomplete.expand(Enum.reverse('%s'))"))
+     (complete . "case IEx.Autocomplete.expand(Enum.reverse('%s')), do: ({:yes, e, []} -> [to_string(e)]; {:yes, [], o} -> Enum.map(o, &to_string/1); _ -> [])"))
+     (behaviour . "b(%s)")
   "Operation associative list: (OP-KEY . OP-FMT).")
 
 (defvar inf-elixir-overlay (make-overlay (point-min) (point-min) nil t t)
@@ -126,6 +132,9 @@ considered a Elixir source file by `inf-elixir-load-file'."
 (defvar inf-elixir-comint-filter-in-progress nil
   "Check if filter is running.")
 
+(defvar inf-elixir-comint-completion-in-progress nil
+  "Check if completion is running.")
+
 ;;; Commands
 
 ;;;###autoload
@@ -134,7 +143,7 @@ considered a Elixir source file by `inf-elixir-load-file'."
   (interactive)
   (let ((buffer (apply 'make-comint
                   inf-elixir-buffer-name
-                  inf-elixir-program
+                  inf-elixir-iex-executable
                   inf-elixir-start-file
                   inf-elixir-args)))
     (unless buffer
@@ -155,16 +164,18 @@ If CMD non-nil, ask for the custom command to invoke iex."
   (interactive (list (if current-prefix-arg
                        (read-from-minibuffer "Type the command: ")
                        "")))
-  (let* ((default-directory (or (vc-root-dir)
-                              (read-directory-name "Select the project root: ")))
+  (let* ((project (project-current))
+          (default-directory (if project
+                               (project-root project)
+                               (read-directory-name "Select the project root: ")))
           (inf-elixir-buffer-name
             (inf-elixir--project-buffer-name))
           (cmd-splited (split-string cmd " "))
-          (inf-elixir-program (cond
-                                ((not (string-empty-p cmd))
-                                  (car cmd-splited))
-                                (t
-                                  inf-elixir-program)))
+          (inf-elixir-iex-executable (cond
+                                       ((not (string-empty-p cmd))
+                                         (car cmd-splited))
+                                       (t
+                                         inf-elixir-iex-executable)))
           (inf-elixir-args (cond
                              ((not (string-empty-p cmd))
                                (cdr cmd-splited))
@@ -194,11 +205,11 @@ If CMD non-nil, ask for the custom command to invoke iex."
 (defun inf-elixir-eval-last-sexp ()
   "Send the previous sexp to the inferior Elixir process."
   (interactive)
-  (inf-elixir--comint-send-region
-    (save-excursion (beginning-of-line) (point)) (point))
+  (inf-elixir--comint-send-string (thing-at-point 'sexp))
   (inf-elixir--wait-output-filter)
-  (inf-elixir--display-overlay
-    (concat " => "  (ansi-color-apply inf-elixir-last-output-line))))
+  (when inf-elixir-minor-mode
+    (inf-elixir--display-overlay
+      (concat " => "  (ansi-color-apply inf-elixir-last-output-line)))))
 
 (defun inf-elixir-eval-buffer ()
   "Send the current buffer to the inferior Elixir process."
@@ -225,9 +236,9 @@ If CMD non-nil, ask for the custom command to invoke iex."
       (file-name-nondirectory file-name)))
   (inf-elixir--comint-send-string file-name 'import-file))
 
-(defun inf-elixir-help (name)
+(defun inf-elixir-doc-help (name)
   "Invoke `h NAME` operation."
-  (interactive (inf-elixir--read-thing "Help"))
+  (interactive (inf-elixir--read-thing "Documentation Help"))
   (inf-elixir--comint-send-string name 'help)
   (inf-elixir--wait-output-filter)
   (inf-elixir--show-help-buffer))
@@ -243,6 +254,13 @@ If CMD non-nil, ask for the custom command to invoke iex."
   "Invoke `i NAME` operation."
   (interactive (inf-elixir--read-thing "Info Help"))
   (inf-elixir--comint-send-string name 'info)
+  (inf-elixir--wait-output-filter)
+  (inf-elixir--show-help-buffer))
+
+(defun inf-elixir-info-behaviour-help (name)
+  "Invoke `b NAME` operation."
+  (interactive (inf-elixir--read-thing "Behaviour Help"))
+  (inf-elixir--comint-send-string name 'behaviour)
   (inf-elixir--wait-output-filter)
   (inf-elixir--show-help-buffer))
 
@@ -266,14 +284,18 @@ If CMD non-nil, ask for the custom command to invoke iex."
 
 (defun inf-elixir--complete-at-point ()
   "Invoke completions for elixir expressions."
-  (let* ((expr (inf-elixir--get-expr)))
-    (inf-elixir--comint-send-string expr 'complete)
+  (let ((expr (inf-elixir--get-expr)))
+    (inf-elixir--clear-cache)
+    (setq inf-elixir-comint-completion-in-progress t)
+    (inf-elixir--comint-send-string (nth 2 expr) 'complete)
     (inf-elixir--wait-output-filter)
-    (list (point) (point) (inf-elixir--get-completions))))
+    (setq inf-elixir-comint-completion-in-progress nil)
+    (list (nth 0 expr) (nth 1 expr) (inf-elixir--get-completions))))
 
 (defun inf-elixir--get-completions ()
   "Get completions list."
-  (let* ((replace-regexp "iex> \\|,\\|'\\|\\[\\|\\]\\|{\\|}\\|\:yes\\|\:no\\|\n")
+  (let* ((replace-regexp
+           "^\\(iex\\|\\.\\.\\.\\).*>\\|,\\|'\\|\"\\|\\[\\|\\]\\|{\\|}\\|\:yes\\|\:no\\|\n")
           (last-output (ansi-color-filter-apply inf-elixir-last-output))
           (sanatized-output (replace-regexp-in-string
                               replace-regexp "" last-output)))
@@ -282,13 +304,15 @@ If CMD non-nil, ask for the custom command to invoke iex."
 (defun inf-elixir--get-expr ()
   "Return the expression under the cursor."
   (if (or (looking-at "\s") (eolp))
-    (let (p1 p2 (skip-chars "-_A-Za-z0-9.?!@:"))
+    (let (p1 p2 p3 (skip-chars "-_A-Za-z0-9.?!@:"))
       (save-excursion
         (skip-chars-backward skip-chars)
         (setq p1 (point))
         (skip-chars-forward skip-chars)
         (setq p2 (point))
-        (buffer-substring-no-properties p1 p2)))))
+        (thing-at-point--beginning-of-symbol)
+        (setq p3 (point))
+        `(,p3 ,p2 ,(buffer-substring-no-properties p1 p2))))))
 
 ;;; Overlay
 
@@ -303,6 +327,11 @@ If CMD non-nil, ask for the custom command to invoke iex."
   (delete-overlay inf-elixir-overlay))
 
 ;;; Private functions
+
+(defun inf-elixir--clear-cache ()
+  "Clear the caches"
+  (setq inf-elixir-last-output ""
+    inf-elixir-last-output-line ""))
 
 (defun inf-elixir--show-help-buffer ()
   "Show inf-elixir helper buffer."
@@ -325,15 +354,52 @@ If CMD non-nil, ask for the custom command to invoke iex."
     inf-elixir-buffer-name
     (car (last (split-string default-directory "/" t)))))
 
-(defun inf-elixir--read-thing (&optional prompt thing)
-  "Return `thing-at-point' string or read it.
-If PROMPT is non-nil use it as the read prompt.
-If THING  is non-nil use it as the `thing-at-point' parameter,
-default: 'symbol."
-  (let* ((str (thing-at-point (or thing 'symbol) t))
+(defun inf-elixir--read-thing (&optional prompt)
+  "Prompt the user using the PROMPT about the thing to select.
+Tries to infer the module function expression if the thing is function call."
+  (let* ((str (inf-elixir--module-function-expr))
           (fmt (if (not str) "%s: " "%s (default %s): "))
           (prompt (format fmt (or prompt "Str: ") str)))
     (list (read-string prompt nil nil str))))
+
+(defun inf-elixir--module-function-expr ()
+  "Try to infer the aliases of the current symbol."
+  (let* ((node (treesit-node-at (point)))
+          (parent-call (treesit-parent-until
+                         node
+                         (lambda (n)
+                           (member (treesit-node-type n)
+                             '("dot"))) t))
+          (module-name (if (null parent-call)
+                         (treesit-node-text node t)
+                         (treesit-node-text (treesit-node-child parent-call 0) t)))
+          (splitted-module (string-split module-name "\\."))
+          (module-name (nth 0 splitted-module))
+          (non-alias-module-name (nth 1 splitted-module))
+          (function-name (when (not (null parent-call))
+                           (treesit-node-text (treesit-node-child parent-call 2) t)))
+          (query-result (treesit-query-capture 'elixir
+                          `(((call
+                               target: (identifier) @keyword
+                               (arguments (alias) @alias_name))
+                              (:match "^alias$" @keyword)
+                              (:match ,(format "%s$" module-name) @alias_name)))
+                          (point-min) (point-max))))
+    (pcase query-result
+      (`(,_ (alias_name . ,node-alias))
+        (cond
+          ((null function-name)
+            (treesit-node-text node-alias t))
+          ((null non-alias-module-name)
+            (format "%s.%s"
+              (treesit-node-text node-alias t)
+              function-name))
+          (t
+            (format "%s.%s.%s"
+              (treesit-node-text node-alias t)
+              non-alias-module-name
+              function-name))))
+      (_ (treesit-node-text node t)))))
 
 (defun inf-elixir--proc ()
   "Return comint buffer current process."
@@ -355,12 +421,19 @@ default: 'symbol."
 (defun inf-elixir--comint-preoutput-filter (string)
   "Return the output STRING."
   (let* ((string (if (stringp string) string ""))
-          (string-without-ansi (ansi-color-filter-apply string)))
+          (string-without-ansi (ansi-color-filter-apply string))
+          (match-prompt? (string-match-p inf-elixir-prompt-regexp string-without-ansi)))
     (push string inf-elixir-proc-output-list)
-    (when (string-match-p inf-elixir-prompt-regexp string-without-ansi)
+    (when match-prompt?
       (inf-elixir--proc-cache-output)
       (setq inf-elixir-comint-filter-in-progress nil))
-    (ansi-color-apply string)))
+    (when (and
+            (null inf-elixir-comint-filter-in-progress)
+            (not match-prompt?))
+      (inf-elixir--comint-send-string ""))
+    (if inf-elixir-comint-completion-in-progress
+      ""
+      (ansi-color-apply string))))
 
 (defun inf-elixir--comint-send (send-func &rest args)
   "Send ARGS (string or region) using the chosen SEND-FUNC.
@@ -382,6 +455,13 @@ Possible values of SEND-FUNC are: `comint-send-string' or `comint-send-region'."
 
   (while inf-elixir-comint-filter-in-progress
     (sleep-for 0 10)))
+
+(defun inf-elixir--spot-prompt (_string)
+  "Move the point to the process mark."
+  (let ((proc (get-buffer-process (current-buffer))))
+    (when proc
+      (save-excursion
+        (goto-char (process-mark proc))))))
 
 (defun inf-elixir--comint-send-string (string &optional op-key)
   "Send STRING to the current inferior process.
@@ -415,6 +495,9 @@ Format the string selecting the right format using the OP-KEY."
 
 (defvar inf-elixir-mode-map
   (let ((map (copy-keymap comint-mode-map)))
+    (when inf-elixir-enable-completion
+      (define-key map "\t" #'completion-at-point)
+      (define-key map (kbd "TAB") #'completion-at-point))
     (define-key map (kbd "C-x C-e") #'inf-elixir-eval-last-sexp)
     (define-key map (kbd "C-c C-l") #'inf-elixir-load-file)
     (define-key map (kbd "C-c C-q") #'inf-elixir-comint-quit)
@@ -433,16 +516,16 @@ Format the string selecting the right format using the OP-KEY."
 ;;; Inf Elixir minor mode definition
 (defvar inf-elixir-minor-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-M-x") #'inf-elixir-eval-def)
-    (define-key map (kbd "C-c C-e") #'inf-elixir-eval-last-sexp)
-    (define-key map (kbd "C-x C-e") #'inf-elixir-eval-last-sexp)
-    (define-key map (kbd "C-c C-b") #'inf-elixir-eval-buffer)
+    (define-key map (kbd "C-M-x") #'inf-elixir-eval-def) ;; Emacs convention
+    (define-key map (kbd "C-x C-e") #'inf-elixir-eval-last-sexp) ;; Emacs convention
+    (define-key map (kbd "C-c C-e") #'inf-elixir-eval-buffer) ;; Emacs convention
     (define-key map (kbd "C-c C-r") #'inf-elixir-eval-region)
-    (define-key map (kbd "C-c C-l") #'inf-elixir-load-file)
-    (define-key map (kbd "C-c C-d") #'inf-elixir-help)
-    (define-key map (kbd "C-c C-t") #'inf-elixir-type-help)
-    (define-key map (kbd "C-c C-i") #'inf-elixir-info-help)
-    (define-key map (kbd "C-c C-q") #'inf-elixir-comint-quit)
+    (define-key map (kbd "C-c C-c l") #'inf-elixir-load-file)
+    (define-key map (kbd "C-c C-c h h") #'inf-elixir-doc-help)
+    (define-key map (kbd "C-c C-c h t") #'inf-elixir-type-help)
+    (define-key map (kbd "C-c C-c h i") #'inf-elixir-info-help)
+    (define-key map (kbd "C-c C-c h b") #'inf-elixir-info-behaviour-help)
+    (define-key map (kbd "C-c C-c q") #'inf-elixir-comint-quit)
     (easy-menu-define inf-elixir-minor-mode-menu map
       "Inferior Elixir Minor Mode Menu"
       '("Inf-Elixir"
@@ -453,9 +536,10 @@ Format the string selecting the right format using the OP-KEY."
          "--"
          ["Load file..." inf-elixir-load-file t]
          "--"
-         ["Help..." inf-elixir-help t]
+         ["Doc Help..." inf-elixir-doc-help t]
          ["Type Help..." inf-elixir-type-help t]
          ["Info Help..." inf-elixir-info-help t]
+         ["Behaviour Help..." inf-elixir-info-behaviour-help t]
          "--"
          ["Quit REPL" inf-elixir-comint-quit]))
     map))
@@ -479,7 +563,7 @@ The following commands are available:
     (inf-elixir-minor-mode
       (setq-local comint-input-sender #'inf-elixir--comint-input-sender)
       (when inf-elixir-enable-completion
-        (add-hook 'completion-at-point-functions #'inf-elixir--complete-at-point 'append t))
+        (add-hook 'completion-at-point-functions #'inf-elixir--complete-at-point 100 t))
       (add-hook 'pre-command-hook #'inf-elixir--delete-overlay nil t))
     (t
       (inf-elixir--delete-overlay)
@@ -514,19 +598,23 @@ The following commands are available:
   :group 'inf-elixir
   :keymap inf-elixir-mode-map
 
-  (setq comint-prompt-regexp inf-elixir-prompt-regexp
+  (setq-local
+    comint-prompt-regexp inf-elixir-prompt-regexp
     comint-prompt-read-only inf-elixir-prompt-read-only
     comint-input-sender #'inf-elixir--comint-input-sender
     comint-get-old-input #'inf-elixir--comint-get-old-input)
 
   (add-hook 'completion-at-point-functions
-    #'inf-elixir--complete-at-point 'append t)
+    #'inf-elixir--complete-at-point -100 t)
 
   (add-hook 'comint-preoutput-filter-functions
-    #'inf-elixir--comint-preoutput-filter 'append t)
+    #'inf-elixir--comint-preoutput-filter 100 t)
 
   (add-hook 'comint-output-filter-functions
-    #'comint-truncate-buffer 'append t)
+    #'comint-truncate-buffer 100 t)
+
+  (add-hook 'comint-output-filter-functions
+    #'inf-elixir--spot-prompt 100 t)
 
   (set (make-local-variable 'paragraph-separate) "\\'")
   (set (make-local-variable 'paragraph-start) inf-elixir-prompt-regexp))
