@@ -3,7 +3,7 @@
 ;; Author: Vinícius Simões <viniciussimoes@protonmail.com>
 ;; Maintainer: Vinícius Simões
 ;; Version: 0.0.1
-;; Package-Requires: ((emacs . "29.1"))
+;; Package-Requires: ((emacs "29.1"))
 ;; Homepage: https://github.com/vinikira/inf-elixir.el
 ;; Keywords: emacs elisp elixir comint
 
