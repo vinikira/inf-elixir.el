@@ -3,7 +3,7 @@
 ;; Author: Vinícius Simões <viniciussimoes@protonmail.com>
 ;; Maintainer: Vinícius Simões
 ;; Version: 0.0.1
-;; Package-Requires: ()
+;; Package-Requires: ((emacs . "29.1"))
 ;; Homepage: https://github.com/vinikira/inf-elixir.el
 ;; Keywords: emacs elisp elixir comint
 
@@ -34,6 +34,7 @@
 (require 'ansi-color)
 (require 'project)
 (require 'thingatpt)
+(require 'treesit)
 
 ;;; Custom group
 
@@ -355,22 +356,50 @@ If CMD non-nil, ask for the custom command to invoke iex."
 
 (defun inf-elixir--read-thing (&optional prompt)
   "Prompt the user using the PROMPT about the thing to select.
-Tries to infer the full module name if the thing is a module."
-  (let* ((str (inf-elixir--full-module-name))
+Tries to infer the module function expression if the thing is function call."
+  (let* ((str (inf-elixir--module-function-expr))
           (fmt (if (not str) "%s: " "%s (default %s): "))
           (prompt (format fmt (or prompt "Str: ") str)))
     (list (read-string prompt nil nil str))))
 
-(defun inf-elixir--full-module-name ()
+(defun inf-elixir--module-function-expr ()
   "Try to infer the aliases of the current symbol."
-  (let* ((buffer-str (buffer-substring-no-properties
-                       (point-min)
-                       (point-max)))
-          (symbol (thing-at-point 'symbol))
-          (regexp (format "alias \\(.+?%s\\)$" symbol)))
-    (if (string-match regexp buffer-str (point-min))
-      (match-string 1 buffer-str)
-      symbol)))
+  (let* ((node (treesit-node-at (point)))
+          (parent-call (treesit-parent-until
+                         node
+                         (lambda (n)
+                           (member (treesit-node-type n)
+                             '("dot"))) t))
+          (module-name (if (null parent-call)
+                         (treesit-node-text node t)
+                         (treesit-node-text (treesit-node-child parent-call 0) t)))
+          (splitted-module (string-split module-name "\\."))
+          (module-name (nth 0 splitted-module))
+          (non-alias-module-name (nth 1 splitted-module))
+          (function-name (when (not (null parent-call))
+                           (treesit-node-text (treesit-node-child parent-call 2) t)))
+          (query-result (treesit-query-capture 'elixir
+                          `(((call
+                               target: (identifier) @keyword
+                               (arguments (alias) @alias_name))
+                              (:match "^alias$" @keyword)
+                              (:match ,(format "%s$" module-name) @alias_name)))
+                          (point-min) (point-max))))
+    (pcase query-result
+      (`(,_ (alias_name . ,node-alias))
+        (cond
+          ((null function-name)
+            (treesit-node-text node-alias t))
+          ((null non-alias-module-name)
+            (format "%s.%s"
+              (treesit-node-text node-alias t)
+              function-name))
+          (t
+            (format "%s.%s.%s"
+              (treesit-node-text node-alias t)
+              non-alias-module-name
+              function-name))))
+      (_ (treesit-node-text node t)))))
 
 (defun inf-elixir--proc ()
   "Return comint buffer current process."
