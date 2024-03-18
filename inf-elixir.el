@@ -104,8 +104,8 @@ considered a Elixir source file by `inf-elixir-load-file'."
      (help . "h(%s)")
      (type . "t(%s)")
      (info . "i(%s)")
-     (complete . "case IEx.Autocomplete.expand(Enum.reverse('%s')), do: ({:yes, e, []} -> [to_string(e)]; {:yes, [], o} -> Enum.map(o, &to_string/1); _ -> [])"))
-     (behaviour . "b(%s)")
+     (complete . "case IEx.Autocomplete.expand(Enum.reverse('%s')), do: ({:yes, e, []} -> [to_string(e)]; {:yes, [], o} -> Enum.map(o, &to_string/1); _ -> [])")
+     (behaviour . "b(%s)"))
   "Operation associative list: (OP-KEY . OP-FMT).")
 
 (defvar inf-elixir-overlay (make-overlay (point-min) (point-min) nil t t)
