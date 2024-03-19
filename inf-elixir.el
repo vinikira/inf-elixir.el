@@ -370,11 +370,11 @@ Tries to infer the module function expression if the thing is function call."
                          (lambda (n)
                            (member (treesit-node-type n)
                              '("dot"))) t))
-          (module-name (if (null parent-call)
-                         (treesit-node-text node t)
-                         (treesit-node-text (treesit-node-child parent-call 0) t)))
-          (splitted-module (string-split module-name "\\."))
-          (module-name (nth 0 splitted-module))
+          (alias-module-name (if (null parent-call)
+                               (treesit-node-text node t)
+                               (treesit-node-text (treesit-node-child parent-call 0) t)))
+          (splitted-module (string-split alias-module-name "\\."))
+          (alias-module-name (nth 0 splitted-module))
           (non-alias-module-name (nth 1 splitted-module))
           (function-name (when (not (null parent-call))
                            (treesit-node-text (treesit-node-child parent-call 2) t)))
@@ -383,7 +383,7 @@ Tries to infer the module function expression if the thing is function call."
                                target: (identifier) @keyword
                                (arguments (alias) @alias_name))
                               (:match "^alias$" @keyword)
-                              (:match ,(format "%s$" module-name) @alias_name)))
+                              (:match ,(format "%s$" alias-module-name) @alias_name)))
                           (point-min) (point-max))))
     (pcase query-result
       (`(,_ (alias_name . ,node-alias))
@@ -399,7 +399,17 @@ Tries to infer the module function expression if the thing is function call."
               (treesit-node-text node-alias t)
               non-alias-module-name
               function-name))))
-      (_ (treesit-node-text node t)))))
+      (_ (if (null parent-call)
+           (format "%s.%s"
+             (treesit-node-text
+               (cdadr (treesit-query-capture 'elixir
+                        `(((call
+                             target: (identifier) @keyword
+                             (arguments (alias) @module_name))
+                            (:match "^defmodule$" @keyword)))
+                        (point-min) (point-max))) t)
+             (treesit-node-text node t))
+           (treesit-node-text parent-call t))))))
 
 (defun inf-elixir--proc ()
   "Return comint buffer current process."
