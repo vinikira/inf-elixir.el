@@ -77,7 +77,7 @@
 
 (defcustom inf-elixir-start-file nil
   "Inferior Elixir start file."
-  :group 'info-elixir
+  :group 'inf-elixir
   :type 'string)
 
 (defcustom inf-elixir-source-modes '(elixir-mode elixir-ts-mode)
@@ -235,6 +235,15 @@ If CMD non-nil, ask for the custom command to invoke iex."
     (cons (file-name-directory file-name)
       (file-name-nondirectory file-name)))
   (inf-elixir--comint-send-string file-name 'import-file))
+
+(defun inf-elixir-format ()
+  "Formats the project using mix format.
+When using PREFIX, format the whole project."
+  (interactive)
+  (if current-prefix-arg
+    (inf-elixir--comint-send-string "Mix.Task.run(\"format\", [])")
+    (let ((file-name (buffer-file-name (current-buffer))))
+      (inf-elixir--comint-send-string (format "Mix.Task.run(\"format\", [\"%s\"])" file-name)))))
 
 (defun inf-elixir-doc-help (name)
   "Invoke `h NAME` operation."
@@ -531,6 +540,7 @@ Format the string selecting the right format using the OP-KEY."
     (define-key map (kbd "C-c C-e") #'inf-elixir-eval-buffer) ;; Emacs convention
     (define-key map (kbd "C-c C-r") #'inf-elixir-eval-region)
     (define-key map (kbd "C-c C-c l") #'inf-elixir-load-file)
+    (define-key map (kbd "C-c C-c f") #'inf-elixir-format)
     (define-key map (kbd "C-c C-c h h") #'inf-elixir-doc-help)
     (define-key map (kbd "C-c C-c h t") #'inf-elixir-type-help)
     (define-key map (kbd "C-c C-c h i") #'inf-elixir-info-help)
