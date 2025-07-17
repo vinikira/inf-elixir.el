@@ -241,9 +241,15 @@ If CMD non-nil, ask for the custom command to invoke iex."
 When using PREFIX, format the whole project."
   (interactive)
   (if current-prefix-arg
-    (inf-elixir--comint-send-string "Mix.Task.run(\"format\", [])")
+    (inf-elixir--comint-send-string "Mix.Tasks.Format.run([])")
     (let ((file-name (buffer-file-name (current-buffer))))
-      (inf-elixir--comint-send-string (format "Mix.Task.run(\"format\", [\"%s\"])" file-name)))))
+      (inf-elixir--comint-send-string (format "Mix.Tasks.Format.run([\"%s\"])" file-name)))
+    (revert-buffer nil t)))
+
+(defun inf-elixir-recompile ()
+  "Recompile project."
+  (interactive)
+  (inf-elixir--comint-send-string "recompile"))
 
 (defun inf-elixir-doc-help (name)
   "Invoke `h NAME` operation."
@@ -541,6 +547,7 @@ Format the string selecting the right format using the OP-KEY."
     (define-key map (kbd "C-c C-r") #'inf-elixir-eval-region)
     (define-key map (kbd "C-c C-c l") #'inf-elixir-load-file)
     (define-key map (kbd "C-c C-c f") #'inf-elixir-format)
+    (define-key map (kbd "C-c C-c r") #'inf-elixir-recompile)
     (define-key map (kbd "C-c C-c h h") #'inf-elixir-doc-help)
     (define-key map (kbd "C-c C-c h t") #'inf-elixir-type-help)
     (define-key map (kbd "C-c C-c h i") #'inf-elixir-info-help)
